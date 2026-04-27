@@ -20,7 +20,7 @@ Notes:
 
 - `VITE_*` values are public runtime config.
 - `VITE_SUPABASE_ANON_KEY` is expected to be public in a browser app.
-- Do not put Stripe, Duffel, or service-role secrets in the frontend env.
+- Do not put Stripe or service-role secrets in the frontend env.
 
 ## 2. Backend production env
 
@@ -30,8 +30,6 @@ Create `backend/.env` from `backend/.env.production.example`:
 PORT=8787
 ALLOWED_ORIGINS=https://connectionrescue.app,https://www.connectionrescue.app
 FRONTEND_URL=https://connectionrescue.app
-DUFFEL_API_KEY=duffel_live_xxx
-DUFFEL_API_VERSION=v2
 AVIATIONSTACK_API_KEY=aviationstack_live_xxx
 STRIPE_SECRET_KEY=sk_live_xxx
 STRIPE_WEBHOOK_SECRET=whsec_live_xxx
@@ -43,7 +41,6 @@ SUPABASE_ANON_KEY=your-public-supabase-anon-key
 
 Secrets that must stay server-side:
 
-- `DUFFEL_API_KEY`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -94,19 +91,13 @@ https://api.connectionrescue.app/api/webhooks/stripe
 - Copy the resulting signing secret into `STRIPE_WEBHOOK_SECRET`.
 - Validate success/cancel URLs match your public frontend domain.
 
-## 5. Duffel requirements
-
-- Create a Duffel account.
-- Start with a test key in staging.
-- Move to a live key only when checkout, webhook, and booking persistence are validated end-to-end.
-
-## 6. Flight status requirements
+## 5. Flight status requirements
 
 - Create an AviationStack account.
 - Put the live key in `AVIATIONSTACK_API_KEY`.
 - Verify real status results for representative carriers you plan to support.
 
-## 7. Domain and hosting
+## 6. Domain and hosting
 
 Frontend:
 
@@ -120,13 +111,13 @@ Backend:
 - expose `/api/*`
 - restrict CORS with `ALLOWED_ORIGINS`
 
-## 8. Remaining launch decisions
+## 7. Remaining launch decisions
 
 - The app still hotlinks imagery from external CloudFront URLs in `src/data/rescueData.ts`.
 - Decide whether to keep that dependency or move the assets under your own control.
 - The public flow is now backend-driven, but admin, SMS, and boarding-pass parsing still depend on missing backend/Supabase pieces.
 
-## 9. Prelaunch verification
+## 8. Prelaunch verification
 
 Run these before production cutover:
 
@@ -138,13 +129,13 @@ npm start
 
 Then verify:
 
-1. `GET /health` reports `duffel=true`, `stripe=true`, and `supabase=true`.
+1. `GET /health` reports `aviationstack=true`, `stripe=true`, and `supabase=true`.
 2. Flight status search returns real data.
-3. Checkout creates a Stripe session.
-4. Stripe webhook writes a booking row.
+3. Rescue Assist checkout creates a Stripe session.
+4. Stripe webhook writes a `manual_rescue` booking row.
 5. `/booking-success` resolves to a `confirmed` booking.
 
-## 10. Post-launch hardening
+## 9. Post-launch hardening
 
 Still recommended after the first production release:
 

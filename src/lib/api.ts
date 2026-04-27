@@ -5,7 +5,7 @@
 // in-tree Supabase edge functions so the app keeps working in environments
 // without the Node service deployed yet.
 //
-// Travel API keys (Duffel, Stripe, AviationStack) NEVER appear in this file
+// Travel API keys (Stripe, AviationStack) NEVER appear in this file
 // or in `import.meta.env` — they live only on the backend.
 
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -49,42 +49,6 @@ export async function getFlightStatus(flightNumber: string) {
   return data;
 }
 
-// ---------- Rescue search (ranked options) ----------
-export interface RescueOption {
-  id: string;
-  offerId: string;
-  flightNum: string;
-  carrier: string;
-  carrierIata?: string;
-  from: string;
-  to: string;
-  toCity: string;
-  depart: string;
-  arrive: string;
-  durationMin: number;
-  connections: number;
-  minLayoverMin: number | null;
-  tightConnection: boolean;
-  seatsLeft: number;
-  price: number;
-  currency: string;
-  sameDest: boolean;
-  nearbyDest: boolean;
-  acceptableDest: boolean;
-  score: number;
-  badges: Array<'best' | 'fastest' | 'cheapest' | 'lowestStress'>;
-}
-
-export interface RescueSearchResponse {
-  runId: string | null;
-  offerRequestId?: string;
-  options: RescueOption[];
-  bestId: string | null;
-  fastestId: string | null;
-  cheapestId: string | null;
-  lowestStressId: string | null;
-}
-
 export interface CheckoutStatusResponse {
   sessionId: string;
   paymentStatus: string | null;
@@ -110,32 +74,6 @@ export interface ConciergeInterestPayload {
   page?: string;
 }
 
-export async function searchRescueOptions(args: {
-  origin: string;
-  destination: string;
-  departureDate: string;     // YYYY-MM-DD
-  originalFlight?: string;
-  originalArrivalISO?: string;
-  adults?: number;
-  cabinClass?: string;
-}): Promise<RescueSearchResponse> {
-  if (!BACKEND_URL) {
-    throw new Error('Backend not configured. Set VITE_BACKEND_URL to enable real Duffel search.');
-  }
-  return backendCall<RescueSearchResponse>('/api/rescue/search', {
-    method: 'POST',
-    body: JSON.stringify(args),
-  });
-}
-
-export async function holdRescueOffer(offerId: string) {
-  if (!BACKEND_URL) throw new Error('Backend not configured');
-  return backendCall<{ offerId: string; stillAvailable: boolean; totalAmount: string; totalCurrency: string; expiresAt: string }>(
-    '/api/rescue/hold',
-    { method: 'POST', body: JSON.stringify({ offerId }) },
-  );
-}
-
 // ---------- Stripe Checkout ----------
 export async function createCheckoutSession(args: {
   runId?: string | null;
@@ -146,7 +84,8 @@ export async function createCheckoutSession(args: {
   traveler: { email: string; name?: string; phone?: string };
   successUrl: string;
   cancelUrl: string;
-  // Legacy fallback fields for non-Duffel bookings (hotels, lounges).
+  // Manual rescue charges for hotels / lounges. Flight purchase happens
+  // directly with the airline in AviationStack-only mode.
   bookingType?: 'flight' | 'hotel' | 'lounge' | 'bundle';
   amountCents?: number;
   metadata?: Record<string, any>;

@@ -28,8 +28,6 @@ Set these on the backend Node host:
 | `PORT` | `8787` | No | Host may inject its own port |
 | `ALLOWED_ORIGINS` | `https://connectionrescue.app,https://www.connectionrescue.app` | No | Exact CORS allowlist |
 | `FRONTEND_URL` | `https://connectionrescue.app` | No | Used for Stripe return URLs |
-| `DUFFEL_API_KEY` | `duffel_live_xxx` | Yes | Never expose client-side |
-| `DUFFEL_API_VERSION` | `v2` | No | Keep synced with Duffel usage |
 | `AVIATIONSTACK_API_KEY` | `aviationstack_live_xxx` | Yes | Required for live flight status |
 | `STRIPE_SECRET_KEY` | `sk_live_xxx` | Yes | Server-only |
 | `STRIPE_APP_NAME` | `ConnectionRescue` | No | Added to Stripe metadata/descriptions for app-level reporting |
@@ -71,7 +69,6 @@ The future mobile app will reuse these public runtime values:
 
 The mobile app must not embed:
 
-- `DUFFEL_API_KEY`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -85,4 +82,4 @@ The mobile app must not embed:
 4. Register the Stripe webhook against the deployed backend.
 5. Set the frontend host variables.
 6. Deploy the frontend.
-7. Test booking end-to-end in production or a staging environment.
+7. Test Rescue Assist checkout end-to-end in production or a staging environment.

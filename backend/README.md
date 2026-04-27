@@ -1,6 +1,6 @@
 # ConnectionRescue API
 
-The real backend for ConnectionRescue. **All travel API keys live here, never in the React bundle.**
+The real backend for ConnectionRescue. **All provider API keys live here, never in the React bundle.**
 
 ## What it does
 
@@ -8,39 +8,37 @@ The real backend for ConnectionRescue. **All travel API keys live here, never in
 | --- | --- | --- |
 | `/health` | GET | Liveness + which integrations are configured |
 | `/api/flights/status?flight=AA2487` | GET | Live flight status (AviationStack) |
-| `/api/rescue/search` | POST | Duffel offer search → ranked rescue options |
-| `/api/rescue/hold` | POST | Re-fetch a single Duffel offer (offers expire fast) |
-| `/api/rescue/book` | POST | Internal: create the Duffel order (called by webhook) |
-| `/api/payments/create-checkout-session` | POST | Stripe Checkout session (fare + $14.99 Rescue Assist fee) |
+| `/api/payments/create-checkout-session` | POST | Stripe Checkout session for Rescue Assist + optional hotel/lounge charges |
 | `/api/payments/checkout-session/:sessionId` | GET | Checkout status + linked booking for the success page |
 | `/api/feedback/concierge-interest` | POST | Save coming-soon concierge demand + optional waitlist details |
-| `/api/webhooks/stripe` | POST | `checkout.session.completed` → Duffel order + DB write |
+| `/api/webhooks/stripe` | POST | `checkout.session.completed` → booking record write |
 
 ## Setup
 
 ```bash
 cd backend
-cp .env.example .env          # fill in real keys
+cp .env.example .env
 npm install
-npm start                     # http://localhost:8787
+npm start
 ```
 
 Then in the React app:
 
-```
+```text
 VITE_BACKEND_URL=http://localhost:8787
 ```
 
 ## Why a separate Node service?
 
-- Duffel & Stripe **secret** keys cannot ship in `import.meta.env.VITE_*` — those are baked into the public JS bundle.
-- The Stripe webhook needs the **raw** request body for signature verification, which is awkward inside Supabase Edge Functions.
-- The Supabase **service-role** key bypasses RLS — keeping it server-side is the only safe place.
+- Stripe **secret** keys cannot ship in `import.meta.env.VITE_*`.
+- AviationStack keys should stay server-side.
+- The Stripe webhook needs the **raw** request body for signature verification.
+- The Supabase **service-role** key bypasses RLS and must stay on the server.
 
-## Booking flow (what actually happens)
+## Payment flow
 
-```
-React app  ──/api/rescue/search──▶  backend ──Duffel──▶ ranked options
+```text
+React app  ──/api/flights/status──▶  backend ──AviationStack──▶ live status
 React app  ──/api/payments/create-checkout-session──▶  Stripe
                                                         │
                                                         ▼
@@ -49,21 +47,14 @@ React app  ──/api/payments/create-checkout-session──▶  Stripe
                                                         ▼ webhook
                                        backend /api/webhooks/stripe
                                                         │
-                                                        ├─ Duffel /air/orders  → confirmation number
                                                         ├─ Supabase bookings INSERT
-                                                        └─ Supabase rescue_runs UPDATE → 'booked'
+                                                        └─ Supabase payment_events UPDATE
 ```
 
-The traveler is **never charged before** a checkout session is created, and we **never book a ticket before** the webhook confirms the payment cleared.
+The traveler is **never charged before** a checkout session is created. In the current AviationStack-only architecture, replacement flights are selected in the app as guidance and purchased directly with the airline outside ConnectionRescue.
 
 ## Required Supabase tables
 
-The MVP expects these tables (a migration helper is in `database/migrations/0001_init.sql` if present, otherwise run the SQL in the project's Supabase tab):
-
-- `users`
-- `traveler_profiles`
-- `rescue_runs`
-- `rescue_options`
 - `bookings`
 - `payment_events`
 - `concierge_interest`
@@ -72,8 +63,4 @@ The MVP expects these tables (a migration helper is in `database/migrations/0001
 
 ## Disclaimer
 
-ConnectionRescue is **not an airline**. We resell air tickets through Duffel
-and route customer service back through the operating carrier. Flight
-availability and pricing can change between search and order; we re-validate
-the offer immediately before charging. Refunds and cancellations follow the
-operating airline's published rules.
+ConnectionRescue is **not an airline**. The app provides live flight status, self-serve disruption guidance, and optional paid rescue assistance. If a traveler selects a replacement flight in AviationStack mode, the actual airline ticket purchase happens directly with the airline or supplier outside ConnectionRescue.

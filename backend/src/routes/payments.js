@@ -1,22 +1,20 @@
 // /api/payments/* — Stripe Checkout for rescue bookings.
 //
 //   POST /api/payments/create-checkout-session
-//        { runId, offerId, totalAmount, currency, traveler:{ email, name, phone },
+//        { currency, amountCents, traveler:{ email, name, phone },
 //          successUrl, cancelUrl }
 //        → { url, sessionId }
 //
 // We charge two line items:
-//   1. The flight fare (from Duffel's offer.total_amount)
+//   1. Optional hotel / lounge add-ons selected in the rescue flow
 //   2. A flat Rescue Assist fee for the self-serve recovery workflow
 //
 // Fulfillment happens in /api/webhooks/stripe on `checkout.session.completed`,
-// which actually creates the Duffel order. The traveler is never charged
-// before we have a confirmed order intent.
+// which records the paid rescue incident in Supabase.
 
 import { Router } from 'express';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../services/supabaseAdmin.js';
-import { getOffer } from '../services/duffel.js';
 
 const router = Router();
 
@@ -33,15 +31,13 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 
   const {
-    runId,
-    offerId,
     currency = 'usd',
     amountCents,
     traveler = {},
     successUrl,
     cancelUrl,
-    itemLabel = 'ConnectionRescue rebooking',
-    bookingType = offerId ? 'flight' : 'bundle',
+    itemLabel = 'ConnectionRescue Rescue Assist',
+    bookingType = 'bundle',
     metadata = {},
   } = req.body || {};
 
@@ -50,21 +46,8 @@ router.post('/create-checkout-session', async (req, res) => {
   try {
     const lineItems = [];
     let sessionCurrency = String(currency || 'usd').toLowerCase();
-    let fareCents = 0;
 
-    if (offerId) {
-      const offer = await getOffer(offerId);
-      fareCents = Math.round(parseFloat(String(offer?.total_amount || '0')) * 100);
-      sessionCurrency = String(offer?.total_currency || sessionCurrency).toLowerCase();
-      lineItems.push({
-        price_data: {
-          currency: sessionCurrency,
-          unit_amount: fareCents,
-          product_data: { name: itemLabel },
-        },
-        quantity: 1,
-      });
-    } else if (addOnCents > 0) {
+    if (addOnCents > 0) {
       lineItems.push({
         price_data: {
           currency: sessionCurrency,
@@ -73,24 +56,6 @@ router.post('/create-checkout-session', async (req, res) => {
         },
         quantity: 1,
       });
-    }
-
-    if (offerId && addOnCents > 0) {
-      lineItems.push({
-        price_data: {
-          currency: sessionCurrency,
-          unit_amount: addOnCents,
-          product_data: {
-            name: 'ConnectionRescue add-ons',
-            description: 'Hotel or lounge add-ons selected during rescue.',
-          },
-        },
-        quantity: 1,
-      });
-    }
-
-    if (!lineItems.length) {
-      return res.status(400).json({ error: 'No payable items were provided for checkout.' });
     }
 
     if (SERVICE_FEE_CENTS > 0) {
@@ -107,7 +72,11 @@ router.post('/create-checkout-session', async (req, res) => {
       });
     }
 
-    const computedTotalCents = fareCents + addOnCents + SERVICE_FEE_CENTS;
+    if (!lineItems.length) {
+      return res.status(400).json({ error: 'No payable items were provided for checkout.' });
+    }
+
+    const computedTotalCents = addOnCents + SERVICE_FEE_CENTS;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -118,8 +87,6 @@ router.post('/create-checkout-session', async (req, res) => {
       cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/booking-cancelled`,
       metadata: {
         app_name: STRIPE_APP_NAME,
-        run_id: runId || '',
-        offer_id: offerId,
         traveler_email: traveler.email || '',
         traveler_name: traveler.name || '',
         traveler_phone: traveler.phone || '',
@@ -127,12 +94,11 @@ router.post('/create-checkout-session', async (req, res) => {
         item_label: itemLabel,
         add_on_cents: String(addOnCents),
         service_fee_cents: String(SERVICE_FEE_CENTS),
+        booking_mode: 'guidance_only',
         ...metadata,
       },
       payment_intent_data: {
-        description: offerId
-          ? `${STRIPE_APP_NAME} • offer ${offerId}`
-          : `${STRIPE_APP_NAME} • ${bookingType}`,
+        description: `${STRIPE_APP_NAME} • ${bookingType}`,
       },
     });
 
@@ -144,8 +110,8 @@ router.post('/create-checkout-session', async (req, res) => {
         status: 'pending',
         amount_cents: computedTotalCents,
         currency: sessionCurrency,
-        run_id: runId || null,
-        offer_id: offerId || null,
+        run_id: null,
+        offer_id: null,
         metadata: session.metadata,
       });
     }

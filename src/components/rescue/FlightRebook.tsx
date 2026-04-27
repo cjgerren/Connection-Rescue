@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plane, Clock, Users, MapPin, Check, ArrowRight, Filter, Loader2, AlertCircle, Info } from 'lucide-react';
+import { Plane, Clock, Users, MapPin, Check, ArrowRight, Filter, Info } from 'lucide-react';
 import { ALTERNATE_FLIGHTS, Flight, ORIGINAL_FLIGHT, PLANE_IMG } from '@/data/rescueData';
-import { searchRescueOptions, type RescueOption, isBackendConfigured } from '@/lib/api';
 import { useTraveler } from '@/contexts/TravelerContext';
 import type { LiveFlight } from './FlightSearch';
 
@@ -11,106 +10,33 @@ interface Props {
   liveFlight: LiveFlight | null;
 }
 
-const formatDuration = (minutes: number) => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${h}h ${m}m`;
-};
+const buildGuidanceFlights = (origin: string, destination: string, destinationLabel: string): Flight[] =>
+  ALTERNATE_FLIGHTS.map((flight) => {
+    const sameDest = flight.id === 'f3';
 
-const describeDestination = (option: RescueOption) => {
-  if (option.sameDest) return 'Original destination';
-  if (option.nearbyDest) return 'Nearby airport';
-  return 'Alternate arrival';
-};
-
-const mapOptionToFlight = (option: RescueOption, runId: string | null): Flight => ({
-  id: option.id,
-  flightNum: option.flightNum,
-  carrier: option.carrier,
-  from: option.from,
-  to: option.to,
-  toCity: option.toCity,
-  depart: option.depart,
-  arrive: option.arrive,
-  duration: formatDuration(option.durationMin),
-  seatsLeft: option.seatsLeft,
-  price: option.price,
-  status: option.tightConnection ? 'Tight connection' : option.connections > 0 ? `${option.connections} stop${option.connections > 1 ? 's' : ''}` : 'Nonstop',
-  distanceFromDest: describeDestination(option),
-  connections: option.connections,
-  offerId: option.offerId,
-  runId,
-  totalAmount: option.price.toFixed(2),
-  currency: option.currency,
-  sameDest: option.sameDest,
-  source: 'live',
-});
+    return {
+      ...flight,
+      from: origin,
+      to: sameDest ? destination : flight.to,
+      toCity: sameDest ? destinationLabel : flight.toCity,
+      sameDest,
+      source: 'mock',
+      distanceFromDest: sameDest ? 'Original destination' : flight.distanceFromDest,
+    };
+  });
 
 const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, liveFlight }) => {
   const { profile } = useTraveler();
   const [filter, setFilter] = useState<'all' | 'exact' | 'nearby'>('all');
-  const [options, setOptions] = useState<Flight[]>(ALTERNATE_FLIGHTS);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [usingLiveResults, setUsingLiveResults] = useState(false);
-
-  const departureDate =
-    liveFlight?.departure.scheduled?.slice(0, 10) ||
-    (profile.boardingPass?.departureDate && /^\d{4}-\d{2}-\d{2}$/.test(profile.boardingPass.departureDate)
-      ? profile.boardingPass.departureDate
-      : null);
-  const searchOrigin = liveFlight?.departure.airport || profile.boardingPass?.from || null;
-  const searchDestination = liveFlight?.arrival.airport || profile.boardingPass?.to || null;
+  const searchOrigin = liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from;
+  const searchDestination = liveFlight?.arrival.airport || profile.boardingPass?.to || ORIGINAL_FLIGHT.to;
   const destinationLabel = liveFlight?.arrival.city || profile.boardingPass?.toCity || ORIGINAL_FLIGHT.toCity;
   const destinationAirport = searchDestination || ORIGINAL_FLIGHT.to;
-  const originalFlight = liveFlight?.flightNumber || profile.boardingPass?.flightNumber || undefined;
-  const originalArrivalISO = liveFlight?.arrival.estimated || liveFlight?.arrival.scheduled || undefined;
+  const [options, setOptions] = useState<Flight[]>(buildGuidanceFlights(searchOrigin, searchDestination, destinationLabel));
 
   useEffect(() => {
-    let cancelled = false;
-
-    if (!isBackendConfigured || !searchOrigin || !searchDestination || !departureDate) {
-      setOptions(ALTERNATE_FLIGHTS);
-      setUsingLiveResults(false);
-      setLoadError(null);
-      return;
-    }
-
-    setLoading(true);
-    setLoadError(null);
-
-    searchRescueOptions({
-      origin: searchOrigin,
-      destination: searchDestination,
-      departureDate,
-      originalFlight,
-      originalArrivalISO,
-    })
-      .then((data) => {
-        if (cancelled) return;
-        if (data.options.length === 0) {
-          setOptions(ALTERNATE_FLIGHTS);
-          setUsingLiveResults(false);
-          setLoadError('No live rescue options were returned yet. Showing curated fallback flights for now.');
-          return;
-        }
-        setOptions(data.options.map((option) => mapOptionToFlight(option, data.runId)));
-        setUsingLiveResults(true);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setOptions(ALTERNATE_FLIGHTS);
-        setUsingLiveResults(false);
-        setLoadError((err as Error).message || 'Could not load live rescue options.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [departureDate, originalArrivalISO, originalFlight, searchDestination, searchOrigin]);
+    setOptions(buildGuidanceFlights(searchOrigin, searchDestination, destinationLabel));
+  }, [destinationLabel, searchDestination, searchOrigin]);
 
   const filtered = useMemo(() => options.filter((f) => {
     const exact = f.sameDest ?? f.to === ORIGINAL_FLIGHT.to;
@@ -133,26 +59,11 @@ const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, live
           </div>
         </div>
 
-        {loading && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading live rescue options from the booking backend…
-          </div>
-        )}
-
-        {!loading && usingLiveResults && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            <Info className="h-4 w-4" />
-            Showing live rebooking inventory. Selecting one of these flights can proceed through the production checkout flow.
-          </div>
-        )}
-
-        {!loading && loadError && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <AlertCircle className="h-4 w-4" />
-            {loadError}
-          </div>
-        )}
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <Info className="h-4 w-4" />
+          AviationStack mode is active. These are guided rescue suggestions based on your disrupted route, and the replacement
+          flight itself must still be purchased directly with the airline.
+        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -257,13 +168,13 @@ const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, live
                   <div className="lg:col-span-2 flex flex-col items-end gap-2">
                     <div className="text-right">
                       {flight.price === 0 ? (
-                        <p className="text-emerald-600 font-bold">No fee</p>
+                        <p className="text-emerald-600 font-bold">Guidance only</p>
                       ) : (
-                        <p className="text-slate-900 font-bold">+${flight.price.toFixed(2)}</p>
+                        <p className="text-slate-900 font-bold">Est. airline fare +${flight.price.toFixed(2)}</p>
                       )}
-                      <p className="text-[11px] text-slate-500">
-                        {flight.source === 'live' ? `Rebooking • ${(flight.currency || 'USD').toUpperCase()}` : 'Demo pricing'}
-                      </p>
+                        <p className="text-[11px] text-slate-500">
+                          {flight.source === 'live' ? `Rebooking • ${(flight.currency || 'USD').toUpperCase()}` : 'Book directly with airline'}
+                        </p>
                     </div>
                     <button
                       onClick={() => setSelectedFlight(selected ? null : flight)}
@@ -279,7 +190,7 @@ const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, live
                         </>
                       ) : (
                         <>
-                          Rebook <ArrowRight className="w-4 h-4" />
+                          Choose option <ArrowRight className="w-4 h-4" />
                         </>
                       )}
                     </button>

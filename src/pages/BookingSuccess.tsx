@@ -94,7 +94,7 @@ const BookingSuccess: React.FC = () => {
           <p className="mt-3 text-slate-600 max-w-lg mx-auto">
             {loading
               ? 'Stripe is finalizing your payment. This usually takes just a few seconds.'
-              : 'Payment received. A receipt and rescue itinerary are on their way to your inbox.'}
+              : 'Payment received. A receipt and your rescue guidance summary are on their way to your inbox.'}
           </p>
         </div>
 
@@ -145,9 +145,9 @@ const BookingSuccess: React.FC = () => {
           <div className="text-sm">
             <p className="font-semibold text-blue-900">Check your inbox</p>
             <p className="text-blue-800 mt-1">
-              We've sent your Stripe receipt and your rescue itinerary
+              We've sent your Stripe receipt and your rescue summary
               {booking && <> to <strong>{booking.traveler_email}</strong></>}.
-              Show the QR code at the lounge / hotel desk on arrival.
+              If you selected a replacement flight, purchase it directly with the airline using the option you chose in the app.
             </p>
           </div>
         </div>

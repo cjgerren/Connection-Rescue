@@ -13,7 +13,7 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   // Don't crash — let routes return a clear 500 if Supabase isn't configured,
-  // so `npm start` still works for local Duffel-only dev.
+  // so `npm start` still works for local status-only development.
   console.warn(
     '[supabaseAdmin] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing — DB writes will fail.'
   );

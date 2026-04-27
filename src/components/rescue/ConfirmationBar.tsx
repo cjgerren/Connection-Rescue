@@ -22,12 +22,13 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
   const count = [selectedFlight, selectedHotel, selectedLounge].filter(Boolean).length;
   if (count === 0) return null;
 
-  // Compute totals (in cents). Flights here are mostly $0 (rebook within fare class),
+  // Flights are guidance-only in AviationStack mode, so the replacement fare
+  // is purchased directly with the airline and is never charged here.
   // hotels show airlineRate (the traveler's distress rate), lounges charge dayPass.
-  const flightCents = selectedFlight ? Math.max(0, selectedFlight.price) * 100 : 0;
+  const flightCents = selectedFlight?.offerId ? Math.max(0, selectedFlight.price) * 100 : 0;
   const hotelCents = selectedHotel ? Math.max(0, selectedHotel.airlineRate) * 100 : 0;
   const loungeCents = selectedLounge ? Math.max(0, selectedLounge.dayPass) * 100 : 0;
-  const serviceFeeCents = flightCents || hotelCents || loungeCents ? RESCUE_SERVICE_FEE_CENTS : 0;
+  const serviceFeeCents = count > 0 ? RESCUE_SERVICE_FEE_CENTS : 0;
   const subtotalCents = flightCents + hotelCents + loungeCents;
   const totalCents = subtotalCents + serviceFeeCents;
   const totalDollars = (totalCents / 100).toFixed(2);
@@ -50,8 +51,7 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
     .join(' + ') || 'ConnectionRescue Booking';
 
   const travelerName = profile.boardingPass?.passengerName ?? undefined;
-  const hasLiveFlightBooking = !!selectedFlight?.offerId;
-  const includesMockFlight = !!selectedFlight && !hasLiveFlightBooking;
+  const hasBookableFlight = !!selectedFlight?.offerId;
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,11 +65,6 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
       setError('This rescue plan is fully covered — no payment is required. You can close this confirmation.');
       return;
     }
-    if (includesMockFlight) {
-      setError('This flight selection is still demo inventory. Search a live disrupted flight first, or deselect the flight and check out hotels / lounges only.');
-      return;
-    }
-
     // Light client-side phone validation (optional field). If provided, must
     // contain at least 7 digits — server re-normalizes to E.164 before SMS.
     const phoneDigits = phone.replace(/\D/g, '');
@@ -83,11 +78,11 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
       const origin = window.location.origin;
       const session = await createCheckoutSession({
         runId: selectedFlight?.runId ?? null,
-        offerId: selectedFlight?.offerId,
-        totalAmount: selectedFlight?.totalAmount,
+        offerId: hasBookableFlight ? selectedFlight?.offerId : undefined,
+        totalAmount: hasBookableFlight ? selectedFlight?.totalAmount : undefined,
         currency: selectedFlight?.currency || 'usd',
         bookingType,
-        amountCents: hasLiveFlightBooking ? hotelCents + loungeCents : subtotalCents,
+        amountCents: hotelCents + loungeCents,
         itemLabel,
         traveler: {
           email,
@@ -176,9 +171,9 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
                 {selectedFlight && (
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Flight {selectedFlight.flightNum}</span>
+                    <span className="text-slate-600">Flight guidance {selectedFlight.flightNum}</span>
                     <span className="font-mono font-semibold text-slate-900">
-                      {selectedFlight.price > 0 ? `$${selectedFlight.price.toFixed(2)}` : 'Included'}
+                      {selectedFlight.offerId ? `$${selectedFlight.price.toFixed(2)}` : 'Booked separately'}
                     </span>
                   </div>
                 )}
@@ -212,8 +207,8 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
                 </div>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Replacement airfare, hotels, and lounges are charged separately. The Rescue Assist fee covers the ConnectionRescue
-                self-serve recovery workflow and confirmation handling for this incident.
+                Replacement airfare is purchased directly with the airline in AviationStack mode. The Rescue Assist fee covers the
+                ConnectionRescue self-serve recovery workflow and confirmation handling for this incident.
               </p>
 
               <form onSubmit={handleConfirm} className="space-y-3">
@@ -255,16 +250,17 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
                     {error}
                   </div>
                 )}
-                {includesMockFlight && (
+                {selectedFlight && !selectedFlight.offerId && (
                   <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    Demo flight inventory can’t be sold in production. Live flight search results will become bookable when the backend is configured and a real disrupted flight is loaded.
+                    This flight choice is guidance only. ConnectionRescue will charge the Rescue Assist fee, but the replacement
+                    flight itself still needs to be purchased directly with the airline.
                   </div>
                 )}
 
 
                 <button
                   type="submit"
-                  disabled={loading || totalCents <= 0 || includesMockFlight}
+                  disabled={loading || totalCents <= 0}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-bold text-sm hover:from-emerald-500 hover:to-emerald-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading ? (

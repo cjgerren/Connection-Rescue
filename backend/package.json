@@ -2,7 +2,7 @@
   "name": "connectionrescue-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "ConnectionRescue API server. Real Duffel flight search/booking, Stripe Checkout, and Supabase persistence. All travel API keys live here, never in the React app.",
+  "description": "ConnectionRescue API server. AviationStack flight status, Stripe Checkout, and Supabase persistence. All provider API keys live here, never in the React app.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

@@ -2,16 +2,15 @@
 //
 // Run with:   cd backend && cp .env.example .env && npm install && npm start
 //
-// This is the ONLY place that holds Duffel / Stripe / Supabase service-role
+// This is the ONLY place that holds AviationStack / Stripe / Supabase service-role
 // keys. The React app talks to this server via VITE_BACKEND_URL — never
-// directly to Duffel or Stripe.
+// directly to those providers from the browser.
 
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 
 import flightsRouter from './routes/flights.js';
-import rescueRouter from './routes/rescue.js';
 import paymentsRouter from './routes/payments.js';
 import webhooksRouter from './routes/webhooks.js';
 import feedbackRouter from './routes/feedback.js';
@@ -45,13 +44,12 @@ app.get('/health', (_req, res) => res.json({
   ok: true,
   service: 'connectionrescue-api',
   uptime: process.uptime(),
-  duffel: !!process.env.DUFFEL_API_KEY,
+  aviationstack: !!process.env.AVIATIONSTACK_API_KEY,
   stripe: !!process.env.STRIPE_SECRET_KEY,
   supabase: !!process.env.SUPABASE_URL,
 }));
 
 app.use('/api/flights', flightsRouter);
-app.use('/api/rescue', rescueRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/feedback', feedbackRouter);
 
@@ -64,7 +62,7 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`[connectionrescue-api] listening on :${PORT}`);
-  console.log(`  duffel:   ${process.env.DUFFEL_API_KEY ? 'configured' : 'MISSING'}`);
+  console.log(`  aviation: ${process.env.AVIATIONSTACK_API_KEY ? 'configured' : 'MISSING'}`);
   console.log(`  stripe:   ${process.env.STRIPE_SECRET_KEY ? 'configured' : 'MISSING'}`);
   console.log(`  supabase: ${process.env.SUPABASE_URL ? 'configured' : 'MISSING'}`);
   console.log(`  cors:     ${allowedOrigins.join(', ')}`);

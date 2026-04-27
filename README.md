@@ -1,11 +1,11 @@
 # ConnectionRescue
 
-ConnectionRescue is a React + Vite frontend with a separate Express backend for live flight status, Duffel rescue search, Stripe checkout, and webhook-driven booking fulfillment.
+ConnectionRescue is a React + Vite frontend with a separate Express backend for live flight status, rescue guidance checkout, and webhook-driven payment confirmation.
 
 ## Architecture
 
 - `src/`: customer app, legal pages, alerts, and admin UI
-- `backend/`: Express API for flight status, rescue search, checkout, and Stripe webhook handling
+- `backend/`: Express API for flight status, checkout, feedback capture, and Stripe webhook handling
 - `supabase/cron/`: SQL for scheduled polling / rescue-task jobs
 
 The intended production model is:
@@ -33,8 +33,6 @@ Copy `backend/.env.example` to `backend/.env` and set:
 ```bash
 PORT=8787
 ALLOWED_ORIGINS=https://app.your-domain.com
-DUFFEL_API_KEY=duffel_live_or_test_key
-DUFFEL_API_VERSION=v2
 AVIATIONSTACK_API_KEY=aviationstack_key
 STRIPE_SECRET_KEY=sk_live_or_test_key
 STRIPE_WEBHOOK_SECRET=whsec_...
@@ -70,7 +68,7 @@ npm run build
 
 ## Production checklist
 
-- Configure real `Duffel`, `Stripe`, `AviationStack`, and `Supabase` credentials.
+- Configure real `Stripe`, `AviationStack`, and `Supabase` credentials.
 - Create the required Supabase tables and RLS policies used by the app and admin pages.
 - Deploy the Stripe webhook to `/api/webhooks/stripe` and register the live webhook secret.
 - Confirm `ALLOWED_ORIGINS` matches your frontend domain exactly.
@@ -91,4 +89,4 @@ npm run build
 - Frontend production build passes.
 - Public checkout now uses the backend instead of relying on a missing frontend-only checkout function.
 - Booking success polling is aligned with backend `confirmed` statuses.
-- Live flight rescue inventory is used when the backend is configured and real flight context is available; otherwise the UI falls back to curated demo options.
+- Flight rescue is now AviationStack-driven guidance mode: live flight status plus curated rebooking suggestions, with actual airline ticket purchase handled outside the app.
