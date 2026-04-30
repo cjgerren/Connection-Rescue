@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, RefreshCw, Bell, LogOut, Plane, AlertTriangle, MessageSquare, Mail } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, RefreshCw, Bell, LogOut, Plane, AlertTriangle, MessageSquare, Mail, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import AlertTimeline, { AlertEvent } from '@/components/alerts/AlertTimeline';
-
-const STORAGE_KEY = 'rescue.alerts.email';
+import { useTravelerAuth } from '@/hooks/useTravelerAuth';
 
 interface BookingRow {
   id: string;
@@ -23,11 +22,10 @@ interface PollingRunRow {
 }
 
 const Alerts: React.FC = () => {
-  const [email, setEmail] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    return window.localStorage.getItem(STORAGE_KEY) || '';
-  });
+  const auth = useTravelerAuth();
+  const email = auth.travelerEmail || '';
   const [pendingEmail, setPendingEmail] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [runs, setRuns] = useState<PollingRunRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -136,19 +134,41 @@ const Alerts: React.FC = () => {
       setError('Please enter a valid email address');
       return;
     }
-    window.localStorage.setItem(STORAGE_KEY, trimmed);
-    setEmail(trimmed);
-    setPendingEmail('');
+    setLoading(true);
+    setError(null);
+    setOtpSent(false);
+    auth.signInWithOtp(trimmed).then((result) => {
+      if (!result.ok) {
+        setError(result.error || 'Could not send sign-in email');
+      } else {
+        setOtpSent(true);
+        setPendingEmail(trimmed);
+      }
+    }).finally(() => {
+      setLoading(false);
+    });
   };
 
   const handleSignOut = () => {
-    window.localStorage.removeItem(STORAGE_KEY);
-    setEmail('');
+    auth.signOut();
     setBookings([]);
     setRuns([]);
+    setPendingEmail('');
+    setOtpSent(false);
   };
 
   // === Sign-in gate ===
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a1d3a] via-[#0d2347] to-[#0a1d3a] text-white flex items-center justify-center">
+        <div className="flex items-center gap-3 text-blue-200">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Restoring traveler session…
+        </div>
+      </div>
+    );
+  }
+
   if (!email) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0a1d3a] via-[#0d2347] to-[#0a1d3a] text-white">
@@ -164,12 +184,12 @@ const Alerts: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold">Alert Timeline</h1>
-                <p className="text-blue-200/60 text-xs">Every gate, terminal, and time change we ever sent you</p>
+                <p className="text-blue-200/60 text-xs">Secure traveler sign-in for your ConnectionRescue alert history</p>
               </div>
             </div>
 
             <p className="text-blue-100 text-sm mt-6 mb-5">
-              Enter the email address you used at booking — we'll pull every alert ever dispatched for your flights.
+              Enter the email address you used at booking. We'll email you a secure sign-in link, then load every alert tied to that traveler session.
             </p>
 
             <form onSubmit={handleSignIn} className="space-y-3">
@@ -185,6 +205,15 @@ const Alerts: React.FC = () => {
                 />
               </div>
 
+              {otpSent && (
+                <div className="flex items-start gap-2 text-emerald-200 text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+                  <ShieldCheck className="w-3.5 h-3.5 mt-0.5" />
+                  <span>
+                    Sign-in link sent to <span className="font-semibold">{pendingEmail}</span>. Open it on this device and you’ll come back here signed in.
+                  </span>
+                </div>
+              )}
+
               {error && (
                 <div className="flex items-center gap-2 text-rose-300 text-xs bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
                   <AlertTriangle className="w-3.5 h-3.5" />
@@ -194,15 +223,16 @@ const Alerts: React.FC = () => {
 
               <button
                 type="submit"
+                disabled={loading}
                 className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold py-3 rounded-lg shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-2"
               >
-                <ShieldCheck className="w-4 h-4" />
-                View My Alerts
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                Email Me A Sign-In Link
               </button>
             </form>
 
             <p className="text-blue-300/40 text-[11px] text-center mt-5">
-              We'll only show alerts associated with bookings under this email.
+              Alerts are now tied to an authenticated traveler session, not browser-only email lookup.
             </p>
           </div>
         </div>
