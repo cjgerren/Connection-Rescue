@@ -81,6 +81,7 @@ npm run build
 - `docs/deployment-checklist.md`
 - `docs/hosting-env-matrix.md`
 - `docs/mobile-app-plan.md`
+- `docs/delay-insight-engine-spec.md`
 - `docs/production-readiness-board.md`
 - `.env.production.example`
 - `backend/.env.production.example`

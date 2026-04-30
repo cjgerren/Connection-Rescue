@@ -14,6 +14,7 @@ import flightsRouter from './routes/flights.js';
 import paymentsRouter from './routes/payments.js';
 import webhooksRouter from './routes/webhooks.js';
 import feedbackRouter from './routes/feedback.js';
+import delayReportsRouter from './routes/delayReports.js';
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -52,6 +53,7 @@ app.get('/health', (_req, res) => res.json({
 app.use('/api/flights', flightsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/feedback', feedbackRouter);
+app.use('/api', delayReportsRouter);
 
 // Final 404 / error handlers.
 app.use((req, res) => res.status(404).json({ error: 'not_found', path: req.path }));

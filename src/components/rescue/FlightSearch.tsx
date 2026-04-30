@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Search, Loader2, AlertCircle } from 'lucide-react';
-import { getFlightStatus } from '@/lib/api';
+import { getDelayInsight } from '@/lib/api';
+import type { DelayInsight } from './DelayInsightCard';
+import { mergeDelayInsightResponse } from '@/lib/delayInsight';
 
 export interface LiveFlight {
   source: string;
@@ -32,6 +34,7 @@ export interface LiveFlight {
   live: { altitude: number; speed: number; heading: number } | null;
   usedFallback: boolean;
   apiConfigured: boolean;
+  delayInsight?: DelayInsight | null;
 }
 
 interface Props {
@@ -50,11 +53,8 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
     setLoading(true);
     setError(null);
     try {
-      // Calls the real Node backend at /api/flights/status (or falls back
-      // to the existing Supabase edge function if VITE_BACKEND_URL isn't
-      // set). API keys never appear in the React bundle.
-      const data = await getFlightStatus(value.trim());
-      onResult(data as LiveFlight);
+      const data = await getDelayInsight({ flightNumber: value.trim() });
+      onResult(mergeDelayInsightResponse(data));
       setValue('');
     } catch (err: any) {
       setError(err?.message || 'Could not fetch flight status');

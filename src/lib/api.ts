@@ -49,6 +49,75 @@ export async function getFlightStatus(flightNumber: string) {
   return data;
 }
 
+export async function getDelayInsight(args: {
+  flightNumber: string;
+  date?: string;
+  tripId?: string | null;
+  bookingId?: string | null;
+  connectionDepartureAt?: string | null;
+  minimumConnectionMinutes?: number | null;
+  connectionKey?: string | null;
+}) {
+  if (BACKEND_URL) {
+    const params = new URLSearchParams();
+    params.set('flight', args.flightNumber);
+    if (args.date) params.set('date', args.date);
+    if (args.tripId) params.set('tripId', args.tripId);
+    if (args.bookingId) params.set('bookingId', args.bookingId);
+    if (args.connectionDepartureAt) params.set('connectionDepartureAt', args.connectionDepartureAt);
+    if (args.minimumConnectionMinutes != null) params.set('minimumConnectionMinutes', String(args.minimumConnectionMinutes));
+    if (args.connectionKey) params.set('connectionKey', args.connectionKey);
+    return backendCall(`/api/flights/delay-insight?${params.toString()}`);
+  }
+
+  const flight = await getFlightStatus(args.flightNumber);
+  return {
+    flightKey: `${args.flightNumber}|${args.date || 'unknown'}|${flight?.departure?.airport || 'UNK'}|${flight?.arrival?.airport || 'UNK'}`,
+    flight,
+    travelerReportsCount: 0,
+    causeBucket: 'unknown',
+    confidence: 0.2,
+    etaMinMinutes: Math.max(0, Number(flight?.delayMinutes || 0)),
+    etaMaxMinutes: Math.max(15, Number(flight?.delayMinutes || 0) + 15),
+    projectedDepartureAt: flight?.departure?.estimated || flight?.departure?.scheduled || null,
+    projectedArrivalAt: flight?.arrival?.estimated || flight?.arrival?.scheduled || null,
+    recommendedAction: Number(flight?.delayMinutes || 0) >= 20 ? 'prepare_backup' : 'monitor',
+    topSignals: [
+      {
+        bucket: 'unknown',
+        source: 'flight_status',
+        message: 'Live backend delay insight is not configured; showing status-only fallback.',
+      },
+    ],
+    connectionRisk: null,
+  };
+}
+
+export async function submitDelayReport(payload: {
+  flightKey: string;
+  flightNumber?: string;
+  tripId?: string | null;
+  bookingId?: string | null;
+  travelerEmail?: string | null;
+  travelerUserId?: string | null;
+  reportType: string;
+  freeText?: string;
+  structuredFlags?: Record<string, unknown>;
+  reportedAt?: string;
+  connectionDepartureAt?: string | null;
+  minimumConnectionMinutes?: number | null;
+  connectionKey?: string | null;
+}) {
+  if (!BACKEND_URL) {
+    throw new Error('Backend not configured. Set VITE_BACKEND_URL to submit delay reports.');
+  }
+
+  return backendCall('/api/delay-reports', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface CheckoutStatusResponse {
   sessionId: string;
   paymentStatus: string | null;

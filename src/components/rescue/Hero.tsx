@@ -3,10 +3,13 @@ import { AlertTriangle, Clock, MapPin, Plane, CheckCircle, Radio, Info, Sparkles
 import { ORIGINAL_FLIGHT, HERO_IMG } from '@/data/rescueData';
 import { LiveFlight } from './FlightSearch';
 import { useTraveler } from '@/contexts/TravelerContext';
+import DelayInsightCard from './DelayInsightCard';
+import DelaySignalPrompt from './DelaySignalPrompt';
 
 interface HeroProps {
   onStartRescue: () => void;
   liveFlight: LiveFlight | null;
+  onFlightUpdated?: (flight: LiveFlight) => void;
   onPersonalize?: () => void;
   onViewPricing?: () => void;
 }
@@ -21,7 +24,7 @@ const formatTime = (iso: string | null) => {
   }
 };
 
-const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onPersonalize, onViewPricing }) => {
+const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated, onPersonalize, onViewPricing }) => {
   const { profile, hasProfile } = useTraveler();
   const bp = profile.boardingPass;
   const firstName = bp?.passengerName?.split('/')?.pop()?.split(' ')?.[0] || '';
@@ -204,6 +207,13 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onPersonalize, o
                 <div className={`mt-5 p-3 ${isDisrupted ? 'bg-red-950/40 border-red-500/30 text-red-100' : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-100'} border rounded-lg text-sm`}>
                   <span className="font-semibold">{isDisrupted ? 'Reason' : 'Note'}:</span> {reason}
                 </div>
+              )}
+
+              {liveFlight?.delayInsight && (
+                <>
+                  <DelayInsightCard insight={liveFlight.delayInsight} />
+                  {onFlightUpdated && <DelaySignalPrompt liveFlight={liveFlight} onFlightUpdated={onFlightUpdated} />}
+                </>
               )}
             </div>
           </div>

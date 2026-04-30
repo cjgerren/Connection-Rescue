@@ -45,6 +45,10 @@ const AppLayout: React.FC = () => {
     setActiveView('rescue');
   };
 
+  const handleFlightUpdated = (flight: LiveFlight) => {
+    setLiveFlight(flight);
+  };
+
   const handleClear = () => {
     setSelectedFlight(null);
     setSelectedHotel(null);
@@ -63,6 +67,7 @@ const AppLayout: React.FC = () => {
         <Hero
           onStartRescue={() => setActiveView('flights')}
           liveFlight={liveFlight}
+          onFlightUpdated={handleFlightUpdated}
           onPersonalize={() => setPersonalizeOpen(true)}
           onViewPricing={() => setActiveView('pricing')}
         />
