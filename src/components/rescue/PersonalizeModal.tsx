@@ -1,11 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { useTraveler, BoardingPass } from '@/contexts/TravelerContext';
 import {
   Camera, Upload, MapPin, Sparkles, Check, X, Loader2,
   Plane, ShieldCheck, Crown, AlertCircle, ChevronRight
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import { getAirportCity } from '@/data/airports';
 
 interface PersonalizeModalProps {
   open: boolean;
@@ -22,6 +24,10 @@ const fileToBase64 = (file: File): Promise<string> =>
     r.readAsDataURL(file);
   });
 
+function supportsCameraCapture() {
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+}
+
 const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) => {
   const { setBoardingPass, setLocation, completeSetup, profile } = useTraveler();
   const [step, setStep] = useState<Step>('welcome');
@@ -29,12 +35,17 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
   const [scanError, setScanError] = useState<string | null>(null);
   const [parsed, setParsed] = useState<BoardingPass | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [autoScanCountdown, setAutoScanCountdown] = useState<number | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-
-  if (!open) return null;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const reset = () => {
     setStep('welcome');
@@ -43,27 +54,78 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
     setParsed(null);
     setPreviewUrl(null);
     setUsedFallback(false);
+    setFallbackNote(null);
+    setAutoScanCountdown(null);
+    setCameraReady(false);
+  };
+
+  const stopCamera = () => {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    setCameraStream(null);
+    setAutoScanCountdown(null);
+    setCameraReady(false);
   };
 
   const handleClose = () => {
+    stopCamera();
     onClose();
     setTimeout(reset, 200);
   };
 
   const handleFile = async (file: File) => {
     setScanError(null);
+    setFallbackNote(null);
     setScanning(true);
     setPreviewUrl(URL.createObjectURL(file));
     try {
       const b64 = await fileToBase64(file);
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please upload a boarding-pass photo or screenshot. PDF and wallet-pass files are not supported yet.');
+      }
+      if (!isSupabaseConfigured) {
+        // Allow the user to continue in environments where Supabase isn't wired.
+        setParsed({
+          passengerName: null,
+          flightNumber: null,
+          carrier: null,
+          from: null,
+          to: null,
+          fromCity: null,
+          toCity: null,
+          departureDate: null,
+          departureTime: null,
+          boardingTime: null,
+          gate: null,
+          terminal: null,
+          seat: null,
+          cabin: null,
+          loyaltyNumber: null,
+          loyaltyTier: null,
+          confirmationCode: null,
+        } as BoardingPass);
+        setUsedFallback(true);
+        setFallbackNote('Supabase is not configured in this build. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable live boarding-pass parsing.');
+        setStep('review');
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('parse-boarding-pass', {
         body: { imageBase64: b64 },
       });
       if (error) throw new Error(error.message || 'Scan failed');
       if (!data) throw new Error('No data returned');
+      if (data?.ok === false) throw new Error(data?.error || data?.visionError || 'Scan failed');
       const { usedFallback: fallback, apiConfigured, visionError, ...bp } = data;
       setParsed(bp as BoardingPass);
       setUsedFallback(!!fallback);
+      if (fallback) {
+        if (!apiConfigured) {
+          setFallbackNote('OCR is not configured for boarding-pass parsing in this environment yet.');
+        } else if (visionError) {
+          setFallbackNote(`OCR fallback: ${String(visionError)}`);
+        } else {
+          setFallbackNote('Using fallback parsing for this image.');
+        }
+      }
       setStep('review');
       if (visionError) console.warn('Vision error:', visionError);
     } catch (e) {
@@ -74,13 +136,136 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
   };
 
   const handleSkipScan = () => {
-    // Allow demo / manual flow
-    handleFile(new File([new Blob(['demo'])], 'demo.txt'));
+    stopCamera();
+    setScanError(null);
+    setFallbackNote(null);
+    setScanning(true);
+    try {
+      const demoPass = {
+        passengerName: 'ConnectionRescue Demo',
+        flightNumber: 'AA2487',
+        carrier: 'AA',
+        from: 'JFK',
+        to: 'LAX',
+        fromCity: 'New York',
+        toCity: 'Los Angeles',
+        departureDate: new Date().toISOString().slice(0, 10),
+        departureTime: '12:35',
+        boardingTime: '12:00',
+        gate: 'B12',
+        terminal: '4',
+        seat: '12A',
+        cabin: 'Main',
+        loyaltyNumber: null,
+        loyaltyTier: null,
+        confirmationCode: 'CRDEMO1',
+      } as BoardingPass;
+      setParsed(demoPass);
+      setUsedFallback(true);
+      setFallbackNote('Demo data selected. Scan a real image to personalize with your actual boarding pass.');
+      setStep('review');
+    } finally {
+      setScanning(false);
+    }
   };
+
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
+        },
+        audio: false,
+      });
+      const [track] = stream.getVideoTracks();
+      try {
+        await track?.applyConstraints?.({
+          advanced: [
+            { focusMode: 'continuous' },
+            { exposureMode: 'continuous' },
+            { whiteBalanceMode: 'continuous' },
+          ] as MediaTrackConstraintSet[],
+        });
+      } catch {
+        // Mobile browsers expose focus controls unevenly; the camera still works without them.
+      }
+      setCameraStream(stream);
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : 'Camera unavailable.');
+    }
+  };
+
+  const markCameraReady = () => {
+    setCameraReady(true);
+    setAutoScanCountdown(3);
+  };
+
+  const captureCameraFrame = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      setCameraError('Camera is still warming up. Hold the boarding pass steady and try again.');
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) {
+      setCameraError('Could not capture a camera frame.');
+      return;
+    }
+    stopCamera();
+    await handleFile(new File([blob], 'boarding-pass-camera.jpg', { type: 'image/jpeg' }));
+  };
+
+  useEffect(() => {
+    if (step !== 'scan' || !open) {
+      stopCamera();
+      return;
+    }
+    if (!supportsCameraCapture()) return;
+    void startCamera();
+
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, open]);
+
+  useEffect(() => {
+    if (!videoRef.current || !cameraStream) return;
+    videoRef.current.srcObject = cameraStream;
+  }, [cameraStream]);
+
+  useEffect(() => {
+    if (step !== 'scan' || scanning || !cameraStream || !cameraReady || autoScanCountdown === null) return;
+    if (autoScanCountdown <= 0) {
+      void captureCameraFrame();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setAutoScanCountdown((value) => (value === null ? null : value - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScanCountdown, cameraReady, cameraStream, scanning, step]);
 
   const confirmBoardingPass = () => {
     if (!parsed) return;
-    setBoardingPass(parsed);
+    setBoardingPass({
+      ...parsed,
+      from: parsed.from?.toUpperCase() || null,
+      to: parsed.to?.toUpperCase() || null,
+      fromCity: parsed.fromCity || getAirportCity(parsed.from, ''),
+      toCity: parsed.toCity || getAirportCity(parsed.to, ''),
+    });
     setStep('location');
   };
 
@@ -127,6 +312,8 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
     setStep('done');
   };
 
+  if (!open) return null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
       <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
@@ -152,9 +339,17 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
               error={scanError}
               previewUrl={previewUrl}
               onPickFile={() => fileInputRef.current?.click()}
-              onUseCamera={() => cameraInputRef.current?.click()}
+              onUseCamera={startCamera}
               onSkip={handleSkipScan}
               onBack={() => setStep('welcome')}
+              cameraStream={cameraStream}
+              cameraError={cameraError}
+              videoRef={videoRef}
+              cameraReady={cameraReady}
+              autoScanCountdown={autoScanCountdown}
+              supportsCameraCapture={supportsCameraCapture()}
+              onCameraReady={markCameraReady}
+              onCapture={captureCameraFrame}
             />
           )}
 
@@ -162,6 +357,7 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
             <ReviewStep
               data={parsed}
               usedFallback={usedFallback}
+              fallbackNote={fallbackNote}
               onChange={(field, value) => setParsed({ ...parsed, [field]: value })}
               onConfirm={confirmBoardingPass}
               onRescan={() => { setParsed(null); setStep('scan'); }}
@@ -184,7 +380,7 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.pdf"
+          accept="image/*"
           className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
@@ -196,6 +392,7 @@ const PersonalizeModal: React.FC<PersonalizeModalProps> = ({ open, onClose }) =>
           className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
+        <canvas ref={canvasRef} className="hidden" />
       </div>
     </div>
   );
@@ -251,17 +448,50 @@ const ScanStep: React.FC<{
   onUseCamera: () => void;
   onSkip: () => void;
   onBack: () => void;
-}> = ({ scanning, error, previewUrl, onPickFile, onUseCamera, onSkip, onBack }) => (
+  cameraStream: MediaStream | null;
+  cameraError: string | null;
+  videoRef: React.RefObject<HTMLVideoElement>;
+  cameraReady: boolean;
+  autoScanCountdown: number | null;
+  supportsCameraCapture: boolean;
+  onCameraReady: () => void;
+  onCapture: () => void;
+}> = ({ scanning, error, previewUrl, onPickFile, onUseCamera, onSkip, onBack, cameraStream, cameraError, videoRef, cameraReady, autoScanCountdown, supportsCameraCapture, onCameraReady, onCapture }) => (
   <div>
     <div className="flex items-center gap-2 mb-1">
       <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Step 1 of 2</span>
     </div>
     <h2 className="text-2xl font-bold text-slate-900 mb-2">Scan your boarding pass</h2>
     <p className="text-slate-600 text-sm mb-6">
-      Snap a photo or upload an image / PDF. We'll extract your flight details automatically.
+      Snap a photo or upload an image. We'll extract your flight details automatically.
     </p>
 
-    {scanning ? (
+    {cameraStream && !scanning ? (
+      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 mb-4">
+        <div className="relative aspect-[4/3]">
+          <video ref={videoRef} autoPlay playsInline muted onCanPlay={onCameraReady} className="h-full w-full object-cover" />
+          <div className="absolute inset-6 rounded-2xl border-2 border-white/80 shadow-[0_0_0_999px_rgba(2,6,23,0.35)]" />
+          <div className="absolute left-0 right-0 bottom-0 bg-gradient-to-t from-slate-950/90 to-transparent p-4 text-white">
+            <p className="text-sm font-semibold">Hold the boarding pass inside the frame</p>
+            <p className="text-xs text-white/75">
+              {!cameraReady
+                ? 'Focusing camera...'
+                : autoScanCountdown !== null && autoScanCountdown > 0
+                ? `Auto-scanning in ${autoScanCountdown}...`
+                : 'Capturing...'}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 bg-white p-3">
+          <button onClick={onCapture} className="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+            Scan now
+          </button>
+          <button onClick={onPickFile} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Upload instead
+          </button>
+        </div>
+      </div>
+    ) : scanning ? (
       <div className="border-2 border-dashed border-blue-300 rounded-2xl p-10 text-center bg-blue-50/40">
         <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-3" />
         <p className="font-semibold text-slate-900">Reading your boarding pass…</p>
@@ -272,16 +502,18 @@ const ScanStep: React.FC<{
       </div>
     ) : (
       <div className="grid sm:grid-cols-2 gap-3 mb-4">
-        <button
-          onClick={onUseCamera}
-          className="group flex flex-col items-center gap-2 p-6 rounded-2xl border-2 border-slate-200 hover:border-red-500 hover:bg-red-50/40 transition"
-        >
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-600 to-red-700 flex items-center justify-center shadow group-hover:scale-105 transition">
-            <Camera className="w-6 h-6 text-white" />
-          </div>
-          <p className="font-semibold text-slate-900 text-sm">Use camera</p>
-          <p className="text-xs text-slate-500">Snap a quick photo</p>
-        </button>
+        {supportsCameraCapture && (
+          <button
+            onClick={onUseCamera}
+            className="group flex flex-col items-center gap-2 p-6 rounded-2xl border-2 border-slate-200 hover:border-red-500 hover:bg-red-50/40 transition"
+          >
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-600 to-red-700 flex items-center justify-center shadow group-hover:scale-105 transition">
+              <Camera className="w-6 h-6 text-white" />
+            </div>
+            <p className="font-semibold text-slate-900 text-sm">Use camera</p>
+            <p className="text-xs text-slate-500">Auto-captures when ready</p>
+          </button>
+        )}
         <button
           onClick={onPickFile}
           className="group flex flex-col items-center gap-2 p-6 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 transition"
@@ -290,15 +522,15 @@ const ScanStep: React.FC<{
             <Upload className="w-6 h-6 text-white" />
           </div>
           <p className="font-semibold text-slate-900 text-sm">Upload image / PDF</p>
-          <p className="text-xs text-slate-500">From email or wallet</p>
+          <p className="text-xs text-slate-500">Screenshot or saved image</p>
         </button>
       </div>
     )}
 
-    {error && (
+    {(error || cameraError) && (
       <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs mb-4">
         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-        <span>{error}</span>
+        <span>{error || cameraError}</span>
       </div>
     )}
 
@@ -314,10 +546,11 @@ const ScanStep: React.FC<{
 const ReviewStep: React.FC<{
   data: BoardingPass;
   usedFallback: boolean;
+  fallbackNote?: string | null;
   onChange: (field: keyof BoardingPass, value: string) => void;
   onConfirm: () => void;
   onRescan: () => void;
-}> = ({ data, usedFallback, onChange, onConfirm, onRescan }) => (
+}> = ({ data, usedFallback, fallbackNote, onChange, onConfirm, onRescan }) => (
   <div>
     <div className="flex items-center gap-2 mb-1">
       <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Step 1 of 2 · Review</span>
@@ -329,7 +562,7 @@ const ReviewStep: React.FC<{
       <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs mb-4">
         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
         <span>
-          Demo data shown. Live boarding-pass parsing is not configured in this environment yet, so this review screen is using fallback sample data.
+          {fallbackNote || 'Using fallback parsing for this boarding pass.'}
         </span>
       </div>
     )}

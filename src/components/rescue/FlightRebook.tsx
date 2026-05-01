@@ -3,6 +3,7 @@ import { Plane, Clock, Users, MapPin, Check, ArrowRight, Filter, Info } from 'lu
 import { ALTERNATE_FLIGHTS, Flight, ORIGINAL_FLIGHT, PLANE_IMG } from '@/data/rescueData';
 import { useTraveler } from '@/contexts/TravelerContext';
 import type { LiveFlight } from './FlightSearch';
+import { getAirportCity } from '@/data/airports';
 
 interface Props {
   selectedFlight: Flight | null;
@@ -30,7 +31,10 @@ const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, live
   const [filter, setFilter] = useState<'all' | 'exact' | 'nearby'>('all');
   const searchOrigin = liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from;
   const searchDestination = liveFlight?.arrival.airport || profile.boardingPass?.to || ORIGINAL_FLIGHT.to;
-  const destinationLabel = liveFlight?.arrival.city || profile.boardingPass?.toCity || ORIGINAL_FLIGHT.toCity;
+  const destinationLabel =
+    liveFlight?.arrival.city ||
+    profile.boardingPass?.toCity ||
+    getAirportCity(searchDestination, ORIGINAL_FLIGHT.toCity);
   const destinationAirport = searchDestination || ORIGINAL_FLIGHT.to;
   const [options, setOptions] = useState<Flight[]>(buildGuidanceFlights(searchOrigin, searchDestination, destinationLabel));
 

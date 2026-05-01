@@ -5,6 +5,7 @@ import { LiveFlight } from './FlightSearch';
 import { useTraveler } from '@/contexts/TravelerContext';
 import DelayInsightCard from './DelayInsightCard';
 import DelaySignalPrompt from './DelaySignalPrompt';
+import { getAirportCity, nearestAirport } from '@/data/airports';
 
 interface HeroProps {
   onStartRescue: () => void;
@@ -34,17 +35,19 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
     ? ['CANCELED', 'DIVERTED', 'DISRUPTED', 'Delayed'].includes(liveFlight.status)
     : true;
 
-  // Pick display values from live flight or fallback to demo
-  const flightNum = liveFlight?.flightNumber || ORIGINAL_FLIGHT.flightNum;
-  const fromCode = liveFlight?.departure.airport || ORIGINAL_FLIGHT.from;
-  const fromCity = liveFlight?.departure.city || 'Chicago O\'Hare';
-  const toCode = liveFlight?.arrival.airport || ORIGINAL_FLIGHT.to;
-  const toCity = liveFlight?.arrival.city || ORIGINAL_FLIGHT.toCity;
-  const departTime = liveFlight ? formatTime(liveFlight.departure.scheduled) : ORIGINAL_FLIGHT.scheduled;
-  const gate = liveFlight?.departure.gate || ORIGINAL_FLIGHT.gate;
-  const status = liveFlight?.status || 'CANCELED';
-  const reason = liveFlight?.reason || ORIGINAL_FLIGHT.reason;
-  const carrier = liveFlight?.carrier || 'American Airlines';
+  const nearest = nearestAirport(profile.location);
+
+  // Pick display values from live flight, then scanned boarding pass, then location/demo.
+  const flightNum = liveFlight?.flightNumber || bp?.flightNumber || ORIGINAL_FLIGHT.flightNum;
+  const fromCode = liveFlight?.departure.airport || bp?.from || nearest?.airport.code || ORIGINAL_FLIGHT.from;
+  const fromCity = liveFlight?.departure.city || bp?.fromCity || getAirportCity(fromCode, "Chicago O'Hare");
+  const toCode = liveFlight?.arrival.airport || bp?.to || ORIGINAL_FLIGHT.to;
+  const toCity = liveFlight?.arrival.city || bp?.toCity || getAirportCity(toCode, ORIGINAL_FLIGHT.toCity);
+  const departTime = liveFlight ? formatTime(liveFlight.departure.scheduled) : bp?.departureTime || ORIGINAL_FLIGHT.scheduled;
+  const gate = liveFlight?.departure.gate || bp?.gate || ORIGINAL_FLIGHT.gate;
+  const status = liveFlight?.status || (bp ? 'MONITORING' : 'CANCELED');
+  const reason = liveFlight?.reason || (bp ? 'Boarding pass scanned. Live disruption status will appear when flight monitoring returns a match.' : ORIGINAL_FLIGHT.reason);
+  const carrier = liveFlight?.carrier || bp?.carrier || 'American Airlines';
   const delayMin = liveFlight?.delayMinutes || 0;
 
   const statusColor = isDisrupted ? 'red' : 'emerald';
