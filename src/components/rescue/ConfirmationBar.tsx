@@ -9,9 +9,11 @@ interface Props {
   selectedHotel: Hotel | null;
   selectedLounge: Lounge | null;
   onClear: () => void;
+  demoMode?: boolean;
+  onDemoFinish?: () => void;
 }
 
-const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLounge, onClear }) => {
+const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLounge, onClear, demoMode = false, onDemoFinish }) => {
   const { profile } = useTraveler();
   const [showCheckout, setShowCheckout] = useState(false);
   const [email, setEmail] = useState('');
@@ -65,8 +67,7 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
       setError('This rescue plan is fully covered — no payment is required. You can close this confirmation.');
       return;
     }
-    // Light client-side phone validation (optional field). If provided, must
-    // contain at least 7 digits — server re-normalizes to E.164 before SMS.
+    // Light client-side phone validation for operator follow-up.
     const phoneDigits = phone.replace(/\D/g, '');
     if (phone && phoneDigits.length < 7) {
       setError('Phone number looks too short. Include country code, e.g. +1 555 123 4567.');
@@ -132,11 +133,17 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
               </p>
             </div>
             <button
-              onClick={() => setShowCheckout(true)}
+              onClick={() => {
+                if (demoMode) {
+                  onDemoFinish?.();
+                  return;
+                }
+                setShowCheckout(true);
+              }}
               className="px-4 py-2 rounded-lg bg-white text-emerald-700 font-bold text-sm hover:bg-emerald-50 transition shrink-0 flex items-center gap-1.5"
             >
               <Lock className="w-3.5 h-3.5" />
-              Confirm
+              {demoMode ? 'Finish Demo' : 'Confirm'}
             </button>
             <button onClick={onClear} className="p-2 hover:bg-white/10 rounded-lg transition" aria-label="Reset">
               <X className="w-4 h-4" />
@@ -145,10 +152,10 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
         </div>
       </div>
 
-      {showCheckout && (
+      {!demoMode && showCheckout && (
         <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white w-full sm:max-w-md max-h-[92dvh] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
                   <CreditCard className="w-4 h-4 text-emerald-700" />
@@ -167,7 +174,7 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overscroll-contain">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
                 {selectedFlight && (
                   <div className="flex items-center justify-between">
@@ -228,7 +235,7 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
                 <label className="block">
                   <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Phone className="w-3 h-3" />
-                    Mobile for SMS alerts
+                    Mobile for rescue follow-up
                     <span className="text-slate-400 font-medium normal-case tracking-normal">(optional)</span>
                   </span>
                   <input
@@ -241,7 +248,7 @@ const ConfirmationBar: React.FC<Props> = ({ selectedFlight, selectedHotel, selec
                     className="mt-1.5 w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                   <span className="mt-1 block text-[11px] text-slate-500 leading-snug">
-                    Get a text confirmation + real-time gate-change alerts. Msg &amp; data rates may apply. Reply STOP to opt out.
+                    Optional. Our ops team can use this if email is not enough during the rescue.
                   </span>
                 </label>
 

@@ -25,7 +25,7 @@ Set these on the backend Node host:
 
 | Variable | Example | Secret? | Notes |
 | --- | --- | --- | --- |
-| `PORT` | `8787` | No | Host may inject its own port |
+| `PORT` | `8788` | No | Host may inject its own port |
 | `ALLOWED_ORIGINS` | `https://connectionrescue.app,https://www.connectionrescue.app` | No | Exact CORS allowlist |
 | `FRONTEND_URL` | `https://connectionrescue.app` | No | Used for Stripe return URLs |
 | `AVIATIONSTACK_API_KEY` | `aviationstack_live_xxx` | Yes | Required for live flight status |

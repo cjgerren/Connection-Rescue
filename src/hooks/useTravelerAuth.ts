@@ -28,8 +28,8 @@ export function useTravelerAuth(): UseTravelerAuth {
         if (error) throw error;
         setSession(data.session ?? null);
         setUser(data.session?.user ?? null);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to restore traveler session');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to restore traveler session');
       } finally {
         booted.current = true;
         setLoading(false);

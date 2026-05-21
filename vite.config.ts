@@ -16,4 +16,17 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@supabase") || id.includes("@tanstack")) return "data";
+          if (id.includes("recharts")) return "charts";
+          if (id.includes("@radix-ui") || id.includes("lucide-react")) return "ui";
+          return "vendor";
+        },
+      },
+    },
+  },
 }));

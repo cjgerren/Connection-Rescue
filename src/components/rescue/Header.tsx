@@ -9,9 +9,11 @@ interface HeaderProps {
   setActiveView: (v: string) => void;
   onFlightFound: (f: LiveFlight) => void;
   onOpenPersonalize: () => void;
+  onStartDemo: () => void;
+  demoMode: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onFlightFound, onOpenPersonalize }) => {
+const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onFlightFound, onOpenPersonalize, onStartDemo, demoMode }) => {
   const { profile, hasProfile } = useTraveler();
   const bp = profile.boardingPass;
   const firstName = bp?.passengerName?.split('/')?.pop()?.split(' ')?.[0] || '';
@@ -66,6 +68,19 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onFlightFoun
           </nav>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onStartDemo}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
+                demoMode
+                  ? 'bg-amber-500/25 text-amber-100 border-amber-300/50'
+                  : 'bg-white/10 hover:bg-white/15 text-blue-100 border-white/15'
+              }`}
+              title="Walk through an interactive app demo"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {demoMode ? 'Demo Active' : 'Demo Mode'}
+            </button>
+
             {/* Personalize button — prominent if not set up */}
             <button
               onClick={onOpenPersonalize}
@@ -133,6 +148,15 @@ const Header: React.FC<HeaderProps> = ({ activeView, setActiveView, onFlightFoun
           >
             <Sparkles className="w-3 h-3" />
             {hasProfile ? 'Trip' : 'Setup'}
+          </button>
+          <button
+            onClick={onStartDemo}
+            className={`sm:hidden px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition flex items-center gap-1 ${
+              demoMode ? 'bg-amber-500 text-slate-900' : 'bg-white/5 text-blue-100 border border-white/10'
+            }`}
+          >
+            <Sparkles className="w-3 h-3" />
+            Demo
           </button>
         </nav>
       </div>

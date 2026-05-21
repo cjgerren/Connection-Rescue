@@ -53,8 +53,8 @@ const AdminSms: React.FC = () => {
         .limit(50);
       if (error) throw error;
       setRows(data || []);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load inbound SMS log');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load inbound SMS log');
     } finally {
       setLoading(false);
     }
@@ -104,8 +104,8 @@ const AdminSms: React.FC = () => {
     return (
       <AdminAuthGate
         auth={auth}
-        title="SMS Audit Log"
-        subtitle="Admin-only — inbound 2-way SMS history"
+        title="SMS Log"
+        subtitle="Admin-only — SMS provider is not enabled for MVP"
       />
     );
   }
@@ -121,7 +121,7 @@ const AdminSms: React.FC = () => {
             <span className="text-blue-200/30">/</span>
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-purple-400" />
-              <span className="text-sm font-semibold">SMS audit log</span>
+              <span className="text-sm font-semibold">SMS log</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -151,14 +151,14 @@ const AdminSms: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8">
           <div className="flex items-center gap-2 text-purple-300 text-xs uppercase tracking-widest font-bold">
-            <Activity className="w-3.5 h-3.5" /> Inbound · last 50 messages
+            <Activity className="w-3.5 h-3.5" /> Inbound log · provider pending
           </div>
           <h1 className="mt-2 text-3xl sm:text-4xl font-black tracking-tight">
-            Two-way <span className="text-purple-400">SMS audit</span>
+            SMS <span className="text-purple-400">not enabled</span>
           </h1>
           <p className="text-blue-200/70 text-sm mt-2">
-            Signed in as <span className="text-white font-semibold">{auth.adminEmail || auth.user?.email}</span>
-            {' · '}Every inbound Twilio webhook (REBOOK / LOUNGE / HOTEL / STATUS / 1-2-3 confirms) shows up here within seconds.
+            Signed in as <span className="text-white font-semibold">{auth.adminEmail ?? auth.user?.email ?? 'admin'}</span>
+            {' · '}This page is ready to show inbound provider webhook records once SMS is wired. Current MVP rescue options are sent by email.
           </p>
         </div>
 
@@ -211,7 +211,7 @@ const AdminSms: React.FC = () => {
                 {visible.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-10 text-center text-blue-300/50 text-xs">
-                      {rows.length === 0 ? 'No inbound SMS yet — try texting REBOOK to your Twilio number.' : 'No rows match this filter.'}
+                      {rows.length === 0 ? 'No inbound SMS records yet. SMS provider integration is not enabled for MVP.' : 'No rows match this filter.'}
                     </td>
                   </tr>
                 )}
@@ -259,7 +259,7 @@ const AdminSms: React.FC = () => {
         </div>
 
         <div className="mt-12 text-center text-blue-300/40 text-[11px]">
-          Showing the last 50 inbound SMS messages. Auto-refreshes every 30 seconds. Twilio signature validation is enforced on the webhook.
+          Showing the last 50 inbound SMS records when provider integration is enabled.
         </div>
       </main>
     </div>

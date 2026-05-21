@@ -115,7 +115,7 @@ const PricingSection: React.FC = () => {
             <Feature
               icon={<MessageSquare className="w-4 h-4" />}
               title="Confirmation alerts"
-              description="Email confirmation now, with SMS alerts when your backend messaging is enabled."
+              description="Email confirmation and an ops-ready rescue record for follow-up."
             />
             <Feature
               icon={<ArrowRight className="w-4 h-4" />}
@@ -174,7 +174,7 @@ const PricingSection: React.FC = () => {
                 <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
-                  placeholder="Manual rebooking, SMS support, hotel fallback, airline coordination..."
+                  placeholder="Manual rebooking, hotel fallback, airline coordination, phone support..."
                   rows={3}
                   className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
                 />

@@ -31,7 +31,7 @@ VITE_RESCUE_SERVICE_FEE_CENTS=1499
 Copy `backend/.env.example` to `backend/.env` and set:
 
 ```bash
-PORT=8787
+PORT=8788
 ALLOWED_ORIGINS=https://app.your-domain.com
 AVIATIONSTACK_API_KEY=aviationstack_key
 STRIPE_SECRET_KEY=sk_live_or_test_key
@@ -85,6 +85,21 @@ npm run build
 - `docs/production-readiness-board.md`
 - `.env.production.example`
 - `backend/.env.production.example`
+
+## Automatic deploys
+
+The repo includes static-host config for both Vercel and Netlify:
+
+- `vercel.json`
+- `netlify.toml`
+
+Connect the host project to `https://github.com/cjgerren/Connection-Rescue` and set the production branch to `main`. After that, every push to `main` should build `dist/` and publish the frontend automatically.
+
+GitHub Actions also verifies the frontend build on every push and pull request. Supabase Edge Functions can deploy automatically from `.github/workflows/supabase-functions-deploy.yml` after adding this GitHub repository secret:
+
+```text
+SUPABASE_ACCESS_TOKEN=your_supabase_cli_access_token
+```
 
 ## Current status
 

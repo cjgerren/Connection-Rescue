@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createUserDelayReport, getDelayInsight, parseFlightKey } from '../services/delayInsightService.js';
+import { getUserFromAuthHeader } from '../services/supabaseAdmin.js';
 
 const router = Router();
 
@@ -36,12 +37,16 @@ router.post('/delay-reports', async (req, res) => {
   }
 
   try {
+    const authUser = await getUserFromAuthHeader(req.get('authorization'));
+    const resolvedTravelerUserId = authUser?.id || travelerUserId || null;
+    const resolvedTravelerEmail = authUser?.email || travelerEmail || null;
+
     const row = await createUserDelayReport({
       flightKey: parsedKey.flightKey,
       tripId,
       bookingId,
-      travelerEmail,
-      travelerUserId,
+      travelerEmail: resolvedTravelerEmail,
+      travelerUserId: resolvedTravelerUserId,
       reportType,
       freeText,
       structuredFlags,

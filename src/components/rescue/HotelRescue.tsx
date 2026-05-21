@@ -1,13 +1,22 @@
 import React from 'react';
-import { Hotel as HotelIcon, Star, Check, ArrowRight, Ticket } from 'lucide-react';
+import { Hotel as HotelIcon, Star, Check, ArrowRight, Ticket, Info } from 'lucide-react';
 import { HOTELS, Hotel } from '@/data/rescueData';
 
 interface Props {
   selectedHotel: Hotel | null;
   setSelectedHotel: (h: Hotel | null) => void;
+  hotelOptions?: Hotel[];
+  inventoryCoverage?: 'supabase' | 'fallback';
+  loadingOptions?: boolean;
 }
 
-const HotelRescue: React.FC<Props> = ({ selectedHotel, setSelectedHotel }) => {
+const HotelRescue: React.FC<Props> = ({
+  selectedHotel,
+  setSelectedHotel,
+  hotelOptions = HOTELS,
+  inventoryCoverage = 'fallback',
+  loadingOptions = false,
+}) => {
   return (
     <section id="hotels" className="bg-white py-14 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,8 +40,17 @@ const HotelRescue: React.FC<Props> = ({ selectedHotel, setSelectedHotel }) => {
           <span className="px-4 py-2 rounded-full bg-emerald-500 text-white text-sm font-bold">VOUCHER ACTIVE</span>
         </div>
 
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <Info className="h-4 w-4" />
+          {loadingOptions
+            ? 'Loading airport-specific hotel inventory...'
+            : inventoryCoverage === 'supabase'
+              ? 'SaaS hotel inventory is active for this airport.'
+              : 'Fallback hotel inventory is active until SaaS records are available for this airport.'}
+        </div>
+
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {HOTELS.map((hotel) => {
+          {hotelOptions.map((hotel) => {
             const selected = selectedHotel?.id === hotel.id;
             return (
               <div

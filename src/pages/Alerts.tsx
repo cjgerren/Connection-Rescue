@@ -10,7 +10,7 @@ interface BookingRow {
   traveler_email: string;
   item_label: string | null;
   last_alert_sent_at: string | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
 }
 
 interface PollingRunRow {
@@ -18,7 +18,42 @@ interface PollingRunRow {
   ran_at: string;
   alerts_sent: number;
   ok: boolean;
-  summary: any;
+  summary: unknown;
+}
+
+interface TimelineChannel {
+  ok?: boolean;
+  sid?: string;
+  id?: string;
+  error?: string;
+  data?: {
+    ok?: boolean;
+    sid?: string;
+    error?: string;
+  };
+}
+
+interface TimelineResultRow {
+  bookingId?: string;
+  sms?: TimelineChannel;
+  email?: TimelineChannel;
+}
+
+interface TimelineSummaryEntry {
+  changed?: boolean;
+  results?: TimelineResultRow[];
+  flight?: string;
+  changes?: string[];
+}
+
+function toObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readRunSummary(value: unknown): TimelineSummaryEntry[] {
+  return Array.isArray(value) ? (value as TimelineSummaryEntry[]) : [];
 }
 
 const Alerts: React.FC = () => {
@@ -53,8 +88,8 @@ const Alerts: React.FC = () => {
 
       setBookings(bookingRows || []);
       setRuns(runRows || []);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load alerts');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load alerts');
     } finally {
       setLoading(false);
     }
@@ -71,8 +106,7 @@ const Alerts: React.FC = () => {
     const out: AlertEvent[] = [];
 
     for (const run of runs) {
-      const summary = run.summary;
-      if (!Array.isArray(summary)) continue;
+      const summary = readRunSummary(run.summary);
       for (const entry of summary) {
         if (!entry?.changed || !Array.isArray(entry?.results)) continue;
         const flightKey: string = entry.flight || '';
@@ -81,8 +115,8 @@ const Alerts: React.FC = () => {
         for (const r of entry.results) {
           if (!r?.bookingId || !myBookingIds.has(r.bookingId)) continue;
           const b = bookingMap.get(r.bookingId);
-          const sms = r.sms || {};
-          const emailRes = r.email || {};
+          const sms = toObject(r.sms) as TimelineChannel;
+          const emailRes = toObject(r.email) as TimelineChannel;
           out.push({
             ranAt: run.ran_at,
             flightKey,

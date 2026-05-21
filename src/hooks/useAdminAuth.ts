@@ -23,6 +23,7 @@ export interface UseAdminAuth {
   user: User | null;
   isAdmin: boolean;
   isOwner: boolean;
+  isHiddenAdmin: boolean;
   role: 'admin' | 'owner' | null;
   loading: boolean;
   error: string | null;
@@ -33,11 +34,28 @@ export interface UseAdminAuth {
   refreshAdminStatus: () => Promise<void>;
 }
 
+const HIDDEN_ADMIN_LABEL = 'ghost-owner';
+type AdminRole = 'admin' | 'owner';
+
+interface VerifyAdminResponse {
+  isAdmin?: boolean;
+  hiddenOwner?: boolean;
+  role?: AdminRole | null;
+  email?: string | null;
+}
+
+interface AdminUserRow {
+  email?: string | null;
+  role?: AdminRole | null;
+  is_hidden?: boolean | null;
+}
+
 export function useAdminAuth(): UseAdminAuth {
   const [session, setSession] = useState<Session | null>(null);
 
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isHiddenAdmin, setIsHiddenAdmin] = useState(false);
   const [role, setRole] = useState<'admin' | 'owner' | null>(null);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +67,7 @@ export function useAdminAuth(): UseAdminAuth {
   const verifyAdmin = useCallback(async (s: Session | null) => {
     if (!s?.user) {
       setIsAdmin(false);
+      setIsHiddenAdmin(false);
       setAdminEmail(null);
       setRole(null);
       lastVerifiedFor.current = null;
@@ -60,7 +79,7 @@ export function useAdminAuth(): UseAdminAuth {
 
     try {
       // Step 1: server-side promote-or-check via edge function
-      const { data: vData, error: vErr } = await supabase.functions.invoke('verify-admin', {
+      const { data: vData, error: vErr } = await supabase.functions.invoke<VerifyAdminResponse>('verify-admin', {
         body: {}
       });
       if (vErr) {
@@ -68,27 +87,46 @@ export function useAdminAuth(): UseAdminAuth {
       }
 
       // Step 2: client-side sanity check using RLS — auth.uid() must match user_id
-      const { data: row } = await supabase
+      // Backwards compatible: older DBs won't have admin_users.is_hidden yet.
+      let row: AdminUserRow | null = null;
+      const res1 = await supabase
         .from('admin_users')
-        .select('email, role')
+        .select('email, role, is_hidden')
         .eq('user_id', s.user.id)
         .maybeSingle();
+      if (!res1.error) {
+        row = res1.data as AdminUserRow | null;
+      } else {
+        const msg = String(res1.error?.message || '');
+        if (msg.toLowerCase().includes('is_hidden')) {
+          const res2 = await supabase
+            .from('admin_users')
+            .select('email, role')
+            .eq('user_id', s.user.id)
+            .maybeSingle();
+          if (!res2.error) row = res2.data as AdminUserRow | null;
+        }
+      }
 
       const ok = !!row || !!vData?.isAdmin;
+      const hidden = !!row?.is_hidden || !!vData?.hiddenOwner;
       setIsAdmin(ok);
-      const resolvedRole = (row?.role || vData?.role || null) as 'admin' | 'owner' | null;
+      setIsHiddenAdmin(hidden);
+      const resolvedRole = (row?.role || vData?.role || null) as AdminRole | null;
       setRole(resolvedRole);
-      setAdminEmail(row?.email || vData?.email || s.user.email || null);
+      setAdminEmail(hidden ? HIDDEN_ADMIN_LABEL : (row?.email || vData?.email || s.user.email || null));
       if (!ok) {
         setError('This account is not on the admin allowlist.');
       } else {
         setError(null);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to verify admin status';
       console.error('verifyAdmin failed', e);
       setIsAdmin(false);
+      setIsHiddenAdmin(false);
       setRole(null);
-      setError(e?.message || 'Failed to verify admin status');
+      setError(message);
     }
   }, []);
 
@@ -103,8 +141,8 @@ export function useAdminAuth(): UseAdminAuth {
         setSession(s);
         setUser(s?.user ?? null);
         await verifyAdmin(s);
-      } catch (e: any) {
-        setError(e?.message || 'Auth init failed');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Auth init failed');
       } finally {
         setLoading(false);
       }
@@ -158,6 +196,7 @@ export function useAdminAuth(): UseAdminAuth {
     setSession(null);
     setUser(null);
     setIsAdmin(false);
+    setIsHiddenAdmin(false);
     setRole(null);
     setAdminEmail(null);
     lastVerifiedFor.current = null;
@@ -173,6 +212,7 @@ export function useAdminAuth(): UseAdminAuth {
     user,
     isAdmin,
     isOwner: role === 'owner',
+    isHiddenAdmin,
     role,
     loading,
     error,
@@ -183,4 +223,3 @@ export function useAdminAuth(): UseAdminAuth {
     refreshAdminStatus
   };
 }
-

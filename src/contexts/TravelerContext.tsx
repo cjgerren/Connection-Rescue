@@ -69,14 +69,18 @@ export const TravelerProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) return JSON.parse(raw);
-    } catch {}
+    } catch {
+      // Ignore invalid localStorage payloads and fall back to defaults.
+    }
     return defaultProfile;
   });
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-    } catch {}
+    } catch {
+      // Ignore storage quota/privacy-mode write failures.
+    }
   }, [profile]);
 
   const setBoardingPass = (boardingPass: BoardingPass) => {
@@ -93,7 +97,11 @@ export const TravelerProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const clearProfile = () => {
     setProfile(defaultProfile);
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
   };
 
   const hasProfile = !!profile.setupCompletedAt && !!profile.boardingPass;

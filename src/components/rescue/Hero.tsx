@@ -13,6 +13,8 @@ interface HeroProps {
   onFlightUpdated?: (flight: LiveFlight) => void;
   onPersonalize?: () => void;
   onViewPricing?: () => void;
+  onStartDemo?: () => void;
+  demoMode?: boolean;
 }
 
 
@@ -25,7 +27,7 @@ const formatTime = (iso: string | null) => {
   }
 };
 
-const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated, onPersonalize, onViewPricing }) => {
+const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated, onPersonalize, onViewPricing, onStartDemo, demoMode }) => {
   const { profile, hasProfile } = useTraveler();
   const bp = profile.boardingPass;
   const firstName = bp?.passengerName?.split('/')?.pop()?.split(' ')?.[0] || '';
@@ -61,13 +63,12 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
-        {/* Demo mode banner */}
+        {/* Manual mode banner */}
         {liveFlight?.usedFallback && (
           <div className="mb-6 inline-flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-100 text-xs max-w-2xl backdrop-blur">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <p>
-              <span className="font-semibold">Demo mode:</span> Showing simulated data because no AviationStack API key is configured. Add{' '}
-              <code className="px-1 py-0.5 bg-black/20 rounded">AVIATIONSTACK_API_KEY</code> to enable real-time flight status.
+              <span className="font-semibold">Manual mode:</span> Live flight lookup did not return a match, so rescue planning is using a fallback route. Confirm details with the airline before acting.
             </p>
           </div>
         )}
@@ -142,6 +143,19 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
                 <Plane className="w-5 h-5" />
                 {isDisrupted ? 'Start Rescue Plan' : 'Pre-Plan Rescue'}
               </button>
+              {onStartDemo && (
+                <button
+                  onClick={onStartDemo}
+                  className={`inline-flex items-center gap-2 px-6 py-4 rounded-xl border font-medium transition ${
+                    demoMode
+                      ? 'bg-amber-500/25 border-amber-300/50 text-amber-100'
+                      : 'bg-white/10 backdrop-blur border-white/20 text-white hover:bg-white/15'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {demoMode ? 'Demo Running' : 'Try Guided Demo'}
+                </button>
+              )}
               <button
                 onClick={onViewPricing}
                 className="inline-flex items-center gap-2 px-6 py-4 rounded-xl bg-white/10 backdrop-blur border border-white/20 text-white font-medium hover:bg-white/15 transition"

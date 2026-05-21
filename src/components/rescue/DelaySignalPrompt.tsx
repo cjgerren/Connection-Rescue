@@ -84,8 +84,8 @@ const DelaySignalPrompt: React.FC<Props> = ({ liveFlight, onFlightUpdated }) => 
         paperwork_mentioned: false,
       });
       setSuccess('Thanks. Delay insight updated with your report.');
-    } catch (err: any) {
-      setError(err?.message || 'Could not submit your update');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not submit your update');
     } finally {
       setLoading(false);
     }

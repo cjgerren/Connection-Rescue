@@ -521,7 +521,7 @@ const ScanStep: React.FC<{
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-700 to-blue-900 flex items-center justify-center shadow group-hover:scale-105 transition">
             <Upload className="w-6 h-6 text-white" />
           </div>
-          <p className="font-semibold text-slate-900 text-sm">Upload image / PDF</p>
+          <p className="font-semibold text-slate-900 text-sm">Upload image</p>
           <p className="text-xs text-slate-500">Screenshot or saved image</p>
         </button>
       </div>

@@ -31,6 +31,21 @@ interface AdminInvite {
   role: 'admin' | 'owner';
   created_at: string;
 }
+type AdminRole = 'admin' | 'owner';
+
+interface ManageAdminsBody {
+  action: 'list' | 'add_invite' | 'remove_invite' | 'set_role' | 'revoke_user';
+  email?: string;
+  role?: AdminRole;
+  user_id?: string;
+}
+
+interface ManageAdminsResponse {
+  ok: boolean;
+  error?: string;
+  users?: AdminUser[];
+  invites?: AdminInvite[];
+}
 
 const AdminTeam: React.FC = () => {
   const auth = useAdminAuth();
@@ -43,10 +58,10 @@ const AdminTeam: React.FC = () => {
   const [flash, setFlash] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'owner'>('admin');
+  const [newRole, setNewRole] = useState<AdminRole>('admin');
 
-  const callManage = useCallback(async (body: any) => {
-    const { data, error } = await supabase.functions.invoke('manage-admins', { body });
+  const callManage = useCallback(async (body: ManageAdminsBody) => {
+    const { data, error } = await supabase.functions.invoke<ManageAdminsResponse>('manage-admins', { body });
     if (error) throw new Error(error.message);
     if (!data?.ok) throw new Error(data?.error || 'manage-admins failed');
     return data;
@@ -60,8 +75,8 @@ const AdminTeam: React.FC = () => {
       const data = await callManage({ action: 'list' });
       setUsers(data.users || []);
       setInvites(data.invites || []);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load team');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load team');
     } finally {
       setLoading(false);
     }
@@ -78,8 +93,8 @@ const AdminTeam: React.FC = () => {
       setFlash({ ok: true, msg: `Invited ${newEmail} as ${newRole}` });
       setNewEmail('');
       setTick((x) => x + 1);
-    } catch (e: any) {
-      setFlash({ ok: false, msg: e.message });
+    } catch (e: unknown) {
+      setFlash({ ok: false, msg: e instanceof Error ? e.message : 'Failed to add invite' });
     } finally {
       setBusy(null);
     }
@@ -93,22 +108,22 @@ const AdminTeam: React.FC = () => {
       await callManage({ action: 'remove_invite', email });
       setFlash({ ok: true, msg: `Removed invite ${email}` });
       setTick((x) => x + 1);
-    } catch (e: any) {
-      setFlash({ ok: false, msg: e.message });
+    } catch (e: unknown) {
+      setFlash({ ok: false, msg: e instanceof Error ? e.message : 'Failed to remove invite' });
     } finally {
       setBusy(null);
     }
   }, [callManage]);
 
-  const setRole = useCallback(async (user: AdminUser, role: 'admin' | 'owner') => {
+  const setRole = useCallback(async (user: AdminUser, role: AdminRole) => {
     setBusy(`role:${user.user_id}`);
     setFlash(null);
     try {
       await callManage({ action: 'set_role', user_id: user.user_id, role });
       setFlash({ ok: true, msg: `${user.email} → ${role}` });
       setTick((x) => x + 1);
-    } catch (e: any) {
-      setFlash({ ok: false, msg: e.message });
+    } catch (e: unknown) {
+      setFlash({ ok: false, msg: e instanceof Error ? e.message : 'Failed to update role' });
     } finally {
       setBusy(null);
     }
@@ -122,8 +137,8 @@ const AdminTeam: React.FC = () => {
       await callManage({ action: 'revoke_user', user_id: user.user_id });
       setFlash({ ok: true, msg: `Revoked ${user.email}` });
       setTick((x) => x + 1);
-    } catch (e: any) {
-      setFlash({ ok: false, msg: e.message });
+    } catch (e: unknown) {
+      setFlash({ ok: false, msg: e instanceof Error ? e.message : 'Failed to revoke user' });
     } finally {
       setBusy(null);
     }
@@ -208,6 +223,11 @@ const AdminTeam: React.FC = () => {
             the moment they sign up. Mutations go through the <span className="font-mono">manage-admins</span> edge
             function (service role + owner check).
           </p>
+          {auth.isHiddenAdmin && (
+            <p className="text-[11px] text-amber-200/80 mt-2">
+              Hidden-owner mode is active. Your account is masked in the UI and excluded from the public team list.
+            </p>
+          )}
         </div>
 
         {error && (
@@ -238,7 +258,7 @@ const AdminTeam: React.FC = () => {
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-widest text-amber-200/70 font-bold">Role</label>
-              <select value={newRole} onChange={(e) => setNewRole(e.target.value as any)}
+              <select value={newRole} onChange={(e) => setNewRole(e.target.value as AdminRole)}
                 className="mt-1 bg-black/40 border border-amber-500/20 rounded-lg px-3 py-2 text-sm text-white outline-none">
                 <option value="admin">admin</option>
                 <option value="owner">owner</option>

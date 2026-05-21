@@ -30,7 +30,7 @@ What is not yet production-ready:
 - Public traveler identity is not real auth.
 - The repo does not ship the Supabase schema that the app expects.
 - The repo references multiple Supabase edge functions that are not present here.
-- The local backend process on port `8787` must be verified against this repo before trusting runtime behavior.
+- The local backend process on port `8788` must be verified against this repo before trusting runtime behavior.
 
 ## Now
 
@@ -108,11 +108,11 @@ Relevant code:
 
 ### 4. Validate the backend runtime against this repo
 
-The current local process on `8787` appears stale or mismatched because its `/health` output does not match [backend/src/server.js](C:/Users/Dell/Projects/travel-rescue-luxury/backend/src/server.js:1).
+The current local process on `8788` appears stale or mismatched because its `/health` output does not match [backend/src/server.js](C:/Users/Dell/Projects/travel-rescue-luxury/backend/src/server.js:1).
 
 Required work:
 
-- stop the stale process on `8787`
+- stop the stale process on `8788`
 - start `backend/src/server.js` directly from this repo
 - verify `/health` reports `aviationstack`, `stripe`, and `supabase`
 - verify checkout/webhook writes to the intended Supabase project
@@ -181,7 +181,7 @@ If a feature is not fully backed by schema, auth, and operations, it should be h
 
 ## Best Immediate Execution Order
 
-1. Verify the backend process on `8787` is this repo, not a stale service.
+1. Verify the backend process on `8788` is this repo, not a stale service.
 2. Build the missing Supabase migrations and RLS policies.
 3. Reintroduce or recreate the referenced edge functions.
 4. Replace public traveler localStorage/email access with real auth.

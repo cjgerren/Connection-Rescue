@@ -31,7 +31,7 @@ interface PollingRun {
   duration_ms: number;
   ok: boolean;
   error: string | null;
-  summary: any;
+  summary: unknown;
 }
 
 interface Props {
@@ -48,6 +48,75 @@ type ReplayState = {
   message?: string;
 };
 
+interface FlightChange {
+  field?: string;
+  text?: string;
+  from?: string | null;
+  to?: string | null;
+  old?: string | null;
+  new?: string | null;
+  departure_time?: string | null;
+}
+
+interface AlertChannel {
+  ok?: boolean;
+  sid?: string;
+  id?: string;
+  error?: string;
+}
+
+interface FlightAlertResult {
+  bookingId?: string;
+  booking_id?: string;
+  email_to?: string;
+  oldGate?: string | null;
+  newGate?: string | null;
+  departureTime?: string | null;
+  sms?: AlertChannel;
+  email?: AlertChannel;
+}
+
+interface FlightSummary {
+  flight_num?: string;
+  flightNum?: string;
+  flight_date?: string;
+  status?: string;
+  error?: string;
+  changes?: unknown;
+  results?: unknown;
+  alerts?: unknown;
+}
+
+function toObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readSummaryFlights(summary: unknown): FlightSummary[] {
+  if (Array.isArray(summary)) return summary as FlightSummary[];
+  const obj = toObject(summary);
+  if (Array.isArray(obj.flights)) return obj.flights as FlightSummary[];
+  return [];
+}
+
+function normalizeChange(value: unknown): FlightChange {
+  if (typeof value === 'string') {
+    return { field: 'change', text: value };
+  }
+  return toObject(value) as FlightChange;
+}
+
+function readChanges(flight: FlightSummary): FlightChange[] {
+  return Array.isArray(flight.changes) ? flight.changes.map(normalizeChange) : [];
+}
+
+function readResults(flight: FlightSummary): FlightAlertResult[] {
+  if (Array.isArray(flight.results)) return flight.results as FlightAlertResult[];
+  if (Array.isArray(flight.alerts)) return flight.alerts as FlightAlertResult[];
+  return [];
+}
+
 const RunDetailDrawer: React.FC<Props> = ({ open, onOpenChange, run, focusFlight }) => {
   const [filter, setFilter] = useState('');
   const [replay, setReplay] = useState<Record<string, ReplayState>>({});
@@ -60,12 +129,9 @@ const RunDetailDrawer: React.FC<Props> = ({ open, onOpenChange, run, focusFlight
     }
   }, [open, focusFlight]);
 
-  const flights: any[] = useMemo(() => {
+  const flights: FlightSummary[] = useMemo(() => {
     if (!run) return [];
-    const summary = run.summary;
-    if (Array.isArray(summary)) return summary;
-    if (Array.isArray(summary?.flights)) return summary.flights;
-    return [];
+    return readSummaryFlights(run.summary);
   }, [run]);
 
   const visibleFlights = useMemo(() => {
@@ -77,11 +143,12 @@ const RunDetailDrawer: React.FC<Props> = ({ open, onOpenChange, run, focusFlight
     });
   }, [flights, filter]);
 
-  async function handleReplay(bookingId: string, flightNum: string, change: any) {
+  async function handleReplay(bookingId: string, flightNum: string, change: FlightChange) {
     if (!bookingId) return;
-    setReplay((p) => ({ ...p, [bookingId + change?.field]: { loading: true } }));
+    const replayKey = `${bookingId}:${change.field || 'change'}`;
+    setReplay((p) => ({ ...p, [replayKey]: { loading: true } }));
     try {
-      const payload: any = {
+      const payload = {
         type: 'gate_change',
         bookingId,
         flightNum,
@@ -89,20 +156,24 @@ const RunDetailDrawer: React.FC<Props> = ({ open, onOpenChange, run, focusFlight
         newGate: change?.to ?? change?.new ?? null,
         departureTime: change?.departure_time ?? null
       };
-      const { data, error } = await supabase.functions.invoke('send-booking-sms', { body: payload });
+      const { data, error } = await supabase.functions.invoke('send-booking-email', { body: payload });
       if (error) throw error;
       setReplay((p) => ({
         ...p,
-        [bookingId + change?.field]: {
+        [replayKey]: {
           loading: false,
           ok: !!data?.ok,
-          message: data?.ok ? `SMS resent · sid ${String(data.sid ?? '').slice(-8)}` : data?.error || 'Send failed'
+          message: data?.ok ? `Email resent · id ${String(data.id ?? '').slice(-8)}` : data?.error || 'Send failed'
         }
       }));
-    } catch (e: any) {
+    } catch (e: unknown) {
       setReplay((p) => ({
         ...p,
-        [bookingId + change?.field]: { loading: false, ok: false, message: e?.message || 'Replay failed' }
+        [replayKey]: {
+          loading: false,
+          ok: false,
+          message: e instanceof Error ? e.message : 'Replay failed'
+        }
       }));
     }
   }
@@ -233,20 +304,14 @@ const MiniStat: React.FC<{
 };
 
 const FlightCard: React.FC<{
-  flight: any;
+  flight: FlightSummary;
   highlight?: boolean | null;
   replay: Record<string, ReplayState>;
-  onReplay: (bookingId: string, flightNum: string, change: any) => void;
+  onReplay: (bookingId: string, flightNum: string, change: FlightChange) => void;
 }> = ({ flight, highlight, replay, onReplay }) => {
   const fn = flight?.flight_num || flight?.flightNum || '???';
-  const changes: any[] = Array.isArray(flight?.changes)
-    ? flight.changes.map((c: any) => (typeof c === 'string' ? { field: 'change', text: c } : c))
-    : [];
-  const results: any[] = Array.isArray(flight?.results)
-    ? flight.results
-    : Array.isArray(flight?.alerts)
-      ? flight.alerts
-      : [];
+  const changes = readChanges(flight);
+  const results = readResults(flight);
 
   return (
     <div className={`rounded-xl border ${highlight ? 'border-purple-500/60 bg-purple-500/5 shadow-lg shadow-purple-500/10' : 'border-white/10 bg-white/5'} p-3`}>
@@ -289,7 +354,7 @@ const FlightCard: React.FC<{
             const bid = r.bookingId || r.booking_id || '';
             const sms = r.sms || {};
             const email = r.email || {};
-            const key = bid + 'gate';
+            const key = `${bid}:gate`;
             const rep = replay[key];
             return (
               <div key={i} className="rounded-lg border border-white/10 bg-black/30 p-2">

@@ -394,7 +394,7 @@ async function persistDelayArtifacts({ flightKey, tripId, bookingId, liveFlight,
 }
 
 export async function getDelayInsight({ flightNumber, fallbackDate, tripId, bookingId, connectionContext = {} }) {
-  const liveFlight = await fetchLiveFlightStatus(flightNumber);
+  const liveFlight = await fetchLiveFlightStatus(flightNumber, { fallbackDate });
   const flightKey = buildFlightKey(liveFlight, fallbackDate);
   const reports = await listRecentDelayReports(flightKey);
   const insight = inferDelayInsight({ flight: liveFlight, reports, connectionContext });

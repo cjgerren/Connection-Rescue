@@ -9,6 +9,9 @@ interface Props {
   selectedFlight: Flight | null;
   setSelectedFlight: (f: Flight | null) => void;
   liveFlight: LiveFlight | null;
+  flightOptions?: Flight[];
+  inventoryCoverage?: 'supabase' | 'fallback';
+  loadingOptions?: boolean;
 }
 
 const buildGuidanceFlights = (origin: string, destination: string, destinationLabel: string): Flight[] =>
@@ -26,7 +29,14 @@ const buildGuidanceFlights = (origin: string, destination: string, destinationLa
     };
   });
 
-const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, liveFlight }) => {
+const FlightRebook: React.FC<Props> = ({
+  selectedFlight,
+  setSelectedFlight,
+  liveFlight,
+  flightOptions = [],
+  inventoryCoverage = 'fallback',
+  loadingOptions = false,
+}) => {
   const { profile } = useTraveler();
   const [filter, setFilter] = useState<'all' | 'exact' | 'nearby'>('all');
   const searchOrigin = liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from;
@@ -39,8 +49,21 @@ const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, live
   const [options, setOptions] = useState<Flight[]>(buildGuidanceFlights(searchOrigin, searchDestination, destinationLabel));
 
   useEffect(() => {
-    setOptions(buildGuidanceFlights(searchOrigin, searchDestination, destinationLabel));
-  }, [destinationLabel, searchDestination, searchOrigin]);
+    const base = flightOptions.length ? flightOptions : ALTERNATE_FLIGHTS;
+    setOptions(base.map((flight, index) => {
+      const defaultSameDest = index === 2 || flight.to === ORIGINAL_FLIGHT.to;
+      const sameDest = flight.sameDest ?? defaultSameDest;
+      return {
+        ...flight,
+        from: searchOrigin,
+        to: sameDest ? searchDestination : flight.to,
+        toCity: sameDest ? destinationLabel : flight.toCity,
+        sameDest,
+        source: flight.source || (inventoryCoverage === 'supabase' ? 'live' : 'mock'),
+        distanceFromDest: sameDest ? 'Original destination' : flight.distanceFromDest,
+      };
+    }));
+  }, [destinationLabel, flightOptions, inventoryCoverage, searchDestination, searchOrigin]);
 
   const filtered = useMemo(() => options.filter((f) => {
     const exact = f.sameDest ?? f.to === ORIGINAL_FLIGHT.to;
@@ -65,8 +88,11 @@ const FlightRebook: React.FC<Props> = ({ selectedFlight, setSelectedFlight, live
 
         <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <Info className="h-4 w-4" />
-          AviationStack mode is active. These are guided rescue suggestions based on your disrupted route, and the replacement
-          flight itself must still be purchased directly with the airline.
+          {loadingOptions
+            ? 'Loading airport-specific rescue inventory...'
+            : inventoryCoverage === 'supabase'
+              ? 'SaaS inventory mode is active for this airport. Replacement flight purchase still happens directly with the airline.'
+              : 'Fallback guidance mode is active. SaaS flight inventory is unavailable for this airport right now.'}
         </div>
 
         {/* Filters */}

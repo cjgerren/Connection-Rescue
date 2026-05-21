@@ -11,7 +11,7 @@ interface AuditRow {
   actor_email: string | null;
   action: string;
   target: string | null;
-  payload: any;
+  payload: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -46,8 +46,8 @@ const AdminAudit: React.FC = () => {
         .limit(100);
       if (error) throw error;
       setRows(data || []);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load audit log');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load audit log');
     } finally {
       setLoading(false);
     }

@@ -1,21 +1,39 @@
-import React, { useState } from 'react';
-import { Coffee, MapPin, Star, Check, ArrowRight, KeyRound, CreditCard, Wifi, Users } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Coffee, MapPin, Star, Check, ArrowRight, KeyRound, CreditCard, Wifi, Users, Info } from 'lucide-react';
 import { LOUNGES, Lounge } from '@/data/rescueData';
+import { useTraveler } from '@/contexts/TravelerContext';
 
 interface Props {
   selectedLounge: Lounge | null;
   setSelectedLounge: (l: Lounge | null) => void;
+  loungeOptions?: Lounge[];
+  inventoryCoverage?: 'supabase' | 'fallback';
+  loadingOptions?: boolean;
 }
 
-// Simulate user memberships
-const MY_MEMBERSHIPS = ['Admirals Club Member', 'AAdvantage Executive Platinum', 'Priority Pass Select'];
-
-const LoungeAccess: React.FC<Props> = ({ selectedLounge, setSelectedLounge }) => {
+const LoungeAccess: React.FC<Props> = ({
+  selectedLounge,
+  setSelectedLounge,
+  loungeOptions = LOUNGES,
+  inventoryCoverage = 'fallback',
+  loadingOptions = false,
+}) => {
+  const { profile } = useTraveler();
   const [filter, setFilter] = useState<'all' | 'access' | 'closest'>('all');
+  const memberships = useMemo(() => {
+    const out = new Set<string>(['Priority Pass Select']);
+    const tier = profile.boardingPass?.loyaltyTier?.trim();
+    if (tier) out.add(tier);
+    if (tier && tier.toLowerCase().includes('executive platinum')) {
+      out.add('AAdvantage Executive Platinum');
+      out.add('Admirals Club Member');
+    }
+    return Array.from(out);
+  }, [profile.boardingPass?.loyaltyTier]);
 
-  const enriched = LOUNGES.map((l) => ({
+  const enriched = loungeOptions.map((l) => ({
     ...l,
-    hasAccess: l.memberAccess.some((m) => MY_MEMBERSHIPS.includes(m)),
+    hasAccess: l.memberAccess.some((m) => memberships.includes(m)),
   }));
 
   let filtered = enriched;
@@ -52,6 +70,15 @@ const LoungeAccess: React.FC<Props> = ({ selectedLounge, setSelectedLounge }) =>
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <Info className="h-4 w-4" />
+          {loadingOptions
+            ? 'Loading airport-specific lounge inventory...'
+            : inventoryCoverage === 'supabase'
+              ? 'SaaS lounge inventory is active for this airport.'
+              : 'Fallback lounge inventory is active until SaaS records are available for this airport.'}
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -181,7 +208,7 @@ const LoungeAccess: React.FC<Props> = ({ selectedLounge, setSelectedLounge }) =>
             Your Membership Wallet
           </div>
           <div className="flex flex-wrap gap-2">
-            {MY_MEMBERSHIPS.map((m) => (
+            {memberships.map((m) => (
               <span
                 key={m}
                 className="px-3 py-1.5 rounded-full bg-white/10 text-white text-sm border border-white/15 flex items-center gap-1.5"

@@ -17,13 +17,21 @@ export const RESCUE_SERVICE_FEE_CENTS = parseInt(
 );
 
 async function backendCall<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init.headers || {}),
+      },
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'network_error';
+    throw new Error(
+      `Could not reach backend at ${BACKEND_URL}. Check VITE_BACKEND_URL, backend port, and CORS allowlist. (${reason})`
+    );
+  }
   const text = await res.text();
   let json: unknown;
   try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
@@ -157,7 +165,7 @@ export async function createCheckoutSession(args: {
   // directly with the airline in AviationStack-only mode.
   bookingType?: 'flight' | 'hotel' | 'lounge' | 'bundle';
   amountCents?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }): Promise<{ url: string; sessionId: string }> {
   if (BACKEND_URL) {
     return backendCall('/api/payments/create-checkout-session', {

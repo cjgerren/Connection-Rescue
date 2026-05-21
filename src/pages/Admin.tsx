@@ -43,7 +43,7 @@ interface PollingRun {
   duration_ms: number;
   ok: boolean;
   error: string | null;
-  summary: any;
+  summary: unknown;
 }
 
 interface Snapshot {
@@ -61,12 +61,37 @@ interface Snapshot {
 
 interface BookingRow {
   id: string;
+  created_at: string | null;
   traveler_email: string;
   traveler_phone: string | null;
   item_label: string | null;
   booking_type: string | null;
+  status: string | null;
+  amount_cents: number | null;
   last_alert_sent_at: string | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
+}
+
+interface SummaryFlight {
+  flight_num?: string;
+  flightNum?: string;
+}
+
+interface ChartBarClickPayload {
+  payload?: {
+    ranAt?: string;
+  };
+}
+
+function readSummaryFlights(summary: unknown): SummaryFlight[] {
+  if (Array.isArray(summary)) {
+    return summary as SummaryFlight[];
+  }
+  if (summary && typeof summary === 'object') {
+    const flights = (summary as { flights?: unknown }).flights;
+    if (Array.isArray(flights)) return flights as SummaryFlight[];
+  }
+  return [];
 }
 
 const Admin: React.FC = () => {
@@ -98,12 +123,8 @@ const Admin: React.FC = () => {
     const upper = flightNum.toUpperCase();
     for (let i = runs.length - 1; i >= 0; i--) {
       const r = runs[i];
-      const flights: any[] = Array.isArray(r.summary)
-        ? r.summary
-        : Array.isArray(r.summary?.flights)
-          ? r.summary.flights
-          : [];
-      const hit = flights.some((f: any) =>
+      const flights = readSummaryFlights(r.summary);
+      const hit = flights.some((f) =>
         String(f?.flight_num || f?.flightNum || '').toUpperCase() === upper
       );
       if (hit) {
@@ -121,8 +142,6 @@ const Admin: React.FC = () => {
     setError(null);
     try {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
       const [runRes, snapRes, bookRes] = await Promise.all([
         supabase
           .from('flight_polling_runs')
@@ -137,9 +156,8 @@ const Admin: React.FC = () => {
           .limit(25),
         supabase
           .from('bookings')
-          .select('id, traveler_email, traveler_phone, item_label, booking_type, last_alert_sent_at, metadata')
-          .gte('last_alert_sent_at', oneHourAgo)
-          .order('last_alert_sent_at', { ascending: false })
+          .select('id, created_at, traveler_email, traveler_phone, item_label, booking_type, status, amount_cents, last_alert_sent_at, metadata')
+          .order('created_at', { ascending: false })
           .limit(50)
       ]);
 
@@ -150,8 +168,8 @@ const Admin: React.FC = () => {
       setRuns(runRes.data || []);
       setSnapshots(snapRes.data || []);
       setRecentlyAlerted(bookRes.data || []);
-    } catch (e: any) {
-      setError(e.message || 'Failed to load admin data');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load admin data');
     } finally {
       setLoading(false);
     }
@@ -235,7 +253,7 @@ const Admin: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-100 transition"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              SMS log
+              SMS setup
             </Link>
 
             <button
@@ -266,7 +284,7 @@ const Admin: React.FC = () => {
             Alert system <span className="text-purple-400">health</span>
           </h1>
           <p className="text-blue-200/70 text-sm mt-2">
-            Signed in as <span className="text-white font-semibold">{auth.adminEmail || auth.user?.email}</span>
+            Signed in as <span className="text-white font-semibold">{auth.adminEmail ?? auth.user?.email ?? 'admin'}</span>
             {stats.lastRun && (
               <>
                 {' · '}Last poll{' '}
@@ -398,7 +416,7 @@ const Admin: React.FC = () => {
                   fill="#a855f7"
                   radius={[3, 3, 0, 0]}
                   cursor="pointer"
-                  onClick={(d: any) => {
+                  onClick={(d: ChartBarClickPayload) => {
                     const ranAt = d?.payload?.ranAt;
                     if (!ranAt) return;
                     const run = runs.find((r) => r.ran_at === ranAt);
@@ -412,10 +430,10 @@ const Admin: React.FC = () => {
           <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-5">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="text-[11px] uppercase tracking-widest text-purple-300/80 font-bold">Past 60 min</div>
+                <div className="text-[11px] uppercase tracking-widest text-purple-300/80 font-bold">Latest checkout activity</div>
                 <div className="text-lg font-bold flex items-center gap-2">
                   <Inbox className="w-4 h-4 text-purple-300" />
-                  Bookings just alerted
+                  Recent bookings
                 </div>
               </div>
               <span className="text-xs text-blue-200/60">{recentlyAlerted.length} bookings</span>
@@ -427,22 +445,22 @@ const Admin: React.FC = () => {
                     <th className="text-left font-semibold py-2 px-2">When</th>
                     <th className="text-left font-semibold py-2 px-2">Traveler</th>
                     <th className="text-left font-semibold py-2 px-2">Item</th>
-                    <th className="text-left font-semibold py-2 px-2">Flight</th>
+                    <th className="text-left font-semibold py-2 px-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentlyAlerted.length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-6 text-center text-blue-300/50 text-xs">
-                        No bookings have been alerted in the last hour.
+                        No bookings yet.
                       </td>
                     </tr>
                   )}
                   {recentlyAlerted.map((b) => (
                     <tr key={b.id} className="border-t border-white/5 hover:bg-white/5">
                       <td className="py-2 px-2 text-blue-200 whitespace-nowrap">
-                        {b.last_alert_sent_at
-                          ? new Date(b.last_alert_sent_at).toLocaleTimeString([], {
+                        {b.created_at
+                          ? new Date(b.created_at).toLocaleTimeString([], {
                               hour: '2-digit',
                               minute: '2-digit'
                             })
@@ -454,9 +472,14 @@ const Admin: React.FC = () => {
                           <div className="text-blue-300/60 text-[10px]">{b.traveler_phone}</div>
                         )}
                       </td>
-                      <td className="py-2 px-2 text-blue-100 text-xs">{b.item_label || b.booking_type || '—'}</td>
+                      <td className="py-2 px-2 text-blue-100 text-xs">
+                        <div>{b.item_label || b.booking_type || '—'}</div>
+                        {typeof b.amount_cents === 'number' && (
+                          <div className="text-blue-300/60 text-[10px]">${(b.amount_cents / 100).toFixed(2)}</div>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-purple-200 text-xs font-mono">
-                        {b.metadata?.flight_num || b.metadata?.flightNum || '—'}
+                        {b.status || '—'}
                       </td>
                     </tr>
                   ))}

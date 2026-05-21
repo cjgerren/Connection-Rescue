@@ -1,47 +1,66 @@
 -- ============================================================================
--- Schedule poll-flight-status to run every 5 minutes
+-- poll-flight-status · strategy and optional schedule
 -- ============================================================================
--- Run this from the Supabase SQL editor (must be a project owner).
--- Requires the `pg_cron` and `pg_net` extensions to be enabled
--- under Database → Extensions in the Supabase dashboard.
+-- Strategy decision (current):
+-- - Keep this cron UNSCHEDULED by default.
+-- - Reason: `poll-flight-status` is not currently deployed in project
+--   mhvjottsregkwadwqwge.
+-- - Live flight status is currently served on-demand via backend
+--   `/api/flights/status`.
 --
--- Replace the two placeholders before running:
---   <PROJECT_REF>      e.g. feslnfaiegtbduxsqrpu
---   <SERVICE_ROLE_KEY> the project's service_role key (keep secret!)
+-- If/when `poll-flight-status` is deployed, use the optional schedule block
+-- at the bottom of this file.
 -- ============================================================================
 
--- 1. Enable extensions (idempotent; safe to re-run)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- 2. Remove any prior schedule of the same job so we can re-create it
+-- Ensure this job is disabled for now.
 SELECT cron.unschedule('poll-flight-status-every-5min')
 WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'poll-flight-status-every-5min'
 );
 
--- 3. Schedule the function. pg_net.http_post is fire-and-forget; the result is
---    written to net._http_response so you can audit calls.
+-- Confirm disabled:
+-- SELECT * FROM cron.job WHERE jobname = 'poll-flight-status-every-5min';
+
+-- ----------------------------------------------------------------------------
+-- OPTIONAL: enable schedule only after `poll-flight-status` function exists.
+-- Requires vault secrets:
+--   - project_url       (https://mhvjottsregkwadwqwge.supabase.co)
+--   - service_role_key  (your Supabase service role key)
+-- ----------------------------------------------------------------------------
+/*
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM vault.decrypted_secrets WHERE name = 'project_url'
+  ) THEN
+    RAISE EXCEPTION 'Missing vault secret: project_url';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM vault.decrypted_secrets WHERE name = 'service_role_key'
+  ) THEN
+    RAISE EXCEPTION 'Missing vault secret: service_role_key';
+  END IF;
+END $$;
+
 SELECT cron.schedule(
   'poll-flight-status-every-5min',
   '*/5 * * * *',
-  $$
+  $cmd$
     SELECT net.http_post(
-      url := 'https://<PROJECT_REF>.functions.supabase.co/poll-flight-status',
+      url := (
+        SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'project_url'
+      ) || '/functions/v1/poll-flight-status',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key'
+        )
       ),
       body := jsonb_build_object('source', 'pg_cron')
-    );
-  $$
+    ) AS request_id;
+  $cmd$
 );
-
--- 4. Verify the job is registered
--- SELECT * FROM cron.job WHERE jobname = 'poll-flight-status-every-5min';
-
--- 5. Inspect recent runs (audit log written by the function itself)
--- SELECT ran_at, flights_checked, bookings_considered, alerts_sent, ok, error
--- FROM flight_polling_runs
--- ORDER BY ran_at DESC
--- LIMIT 20;
+*/

@@ -25,7 +25,7 @@ npm start
 Then in the React app:
 
 ```text
-VITE_BACKEND_URL=http://localhost:8787
+VITE_BACKEND_URL=http://localhost:8788
 ```
 
 ## Why a separate Node service?

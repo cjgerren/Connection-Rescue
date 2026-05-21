@@ -7,7 +7,8 @@ const router = Router();
 router.get('/status', async (req, res) => {
   try {
     const flight = req.query.flight || req.query.flightNumber;
-    const data = await fetchLiveFlightStatus(flight);
+    const flightDate = req.query.date || null;
+    const data = await fetchLiveFlightStatus(flight, { flightDate });
     res.json(data);
   } catch (err) {
     console.error('[flights/status]', err);

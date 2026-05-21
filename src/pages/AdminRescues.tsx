@@ -22,6 +22,33 @@ import { supabase } from '@/lib/supabase';
 import AdminAuthGate from '@/components/admin/AdminAuthGate';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 
+interface RescueOption {
+  flight_num?: string;
+  name?: string;
+  airline?: string;
+  dep_iata?: string;
+  arr_iata?: string;
+  rate_usd?: number;
+  total_with_taxes?: number;
+  refundable_until?: string;
+}
+
+interface RescueFare {
+  fare_usd?: number;
+  change_fee_usd?: number;
+  total_usd?: number;
+}
+
+interface RescueResult {
+  options?: RescueOption[];
+  selected_index?: number;
+  checkout_url?: string;
+  checkout_session_id?: string;
+  checkout_booking_id?: string;
+  fare?: RescueFare;
+  [key: string]: unknown;
+}
+
 interface RescueTask {
   id: string;
   created_at: string;
@@ -35,7 +62,7 @@ interface RescueTask {
   traveler_phone: string | null;
   source: string | null;
   notes: string | null;
-  result: any;
+  result: RescueResult | null;
 }
 
 interface BookingLite {
@@ -47,7 +74,7 @@ interface BookingLite {
   status: string | null;
   amount_cents: number | null;
   stripe_session_id: string | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
 }
 
 interface SmsRow {
@@ -93,6 +120,16 @@ interface WorkerRun {
   trigger: string;
 }
 
+function toObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toRescueResult(value: unknown): RescueResult {
+  return toObject(value) as RescueResult;
+}
+
 const AdminRescues: React.FC = () => {
   const auth = useAdminAuth();
   const [tasks, setTasks] = useState<RescueTask[]>([]);
@@ -109,18 +146,18 @@ const AdminRescues: React.FC = () => {
   const [actionLog, setActionLog] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const writeAudit = useCallback(async (action: string, target: string | null, payload: any) => {
+  const writeAudit = useCallback(async (action: string, target: string | null, payload: unknown) => {
     if (!auth.user?.id) return;
     try {
       await supabase.from('admin_audit_log').insert({
-        actor_user_id: auth.user.id,
+        actor_user_id: auth.isHiddenAdmin ? null : auth.user.id,
         actor_email: auth.adminEmail,
         action,
         target,
         payload
       });
     } catch (e) { /* non-fatal */ }
-  }, [auth.user?.id, auth.adminEmail]);
+  }, [auth.user?.id, auth.adminEmail, auth.isHiddenAdmin]);
 
   const loadData = useCallback(async () => {
     if (!auth.isAdmin) return;
@@ -169,8 +206,8 @@ const AdminRescues: React.FC = () => {
         setBookingMap({});
         setSmsMap({});
       }
-    } catch (e: any) {
-      setError(e.message || 'Failed to load rescue tasks');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load rescue tasks');
     } finally {
       setLoading(false);
     }
@@ -213,17 +250,18 @@ const AdminRescues: React.FC = () => {
     setBusy(task.id);
     setActionLog(null);
     try {
+      const current = toObject(task.result);
       await supabase.from('rescue_tasks').update({
         status: 'queued',
-        result: { ...(task.result || {}), resent_at: new Date().toISOString() }
+        result: { ...current, resent_at: new Date().toISOString() }
       }).eq('id', task.id);
-      const { data, error } = await supabase.functions.invoke('process-rescue-tasks', { body: { task_id: task.id } });
+      const { data, error } = await supabase.functions.invoke('process-rescue-tasks', { body: { task_id: task.id, force: true } });
       if (error) throw error;
       await writeAudit('rescue_resend', task.id, { task_type: task.type, booking_id: task.booking_id, ok: !!data?.ok });
-      setActionLog({ id: task.id, ok: !!data?.ok, msg: data?.ok ? 'Re-sent options SMS' : (data?.error || 'Re-send failed') });
+      setActionLog({ id: task.id, ok: !!data?.ok, msg: data?.ok ? 'Re-sent rescue options' : (data?.error || 'Re-send failed') });
       setTick((x) => x + 1);
-    } catch (e: any) {
-      setActionLog({ id: task.id, ok: false, msg: e.message || 'Re-send failed' });
+    } catch (e: unknown) {
+      setActionLog({ id: task.id, ok: false, msg: e instanceof Error ? e.message : 'Re-send failed' });
     } finally { setBusy(null); }
   }, [writeAudit]);
 
@@ -232,16 +270,17 @@ const AdminRescues: React.FC = () => {
     setBusy(task.id);
     setActionLog(null);
     try {
+      const current = toObject(task.result);
       const { error } = await supabase.from('rescue_tasks').update({
         status: 'cancelled',
-        result: { ...(task.result || {}), cancelled_at: new Date().toISOString(), cancelled_by: auth.adminEmail || 'admin' }
+        result: { ...current, cancelled_at: new Date().toISOString(), cancelled_by: auth.adminEmail || 'admin' }
       }).eq('id', task.id);
       if (error) throw error;
       await writeAudit('rescue_cancel', task.id, { task_type: task.type, booking_id: task.booking_id });
       setActionLog({ id: task.id, ok: true, msg: 'Task cancelled' });
       setTick((x) => x + 1);
-    } catch (e: any) {
-      setActionLog({ id: task.id, ok: false, msg: e.message || 'Cancel failed' });
+    } catch (e: unknown) {
+      setActionLog({ id: task.id, ok: false, msg: e instanceof Error ? e.message : 'Cancel failed' });
     } finally { setBusy(null); }
   }, [auth.adminEmail, writeAudit]);
 
@@ -274,7 +313,7 @@ const AdminRescues: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Link to="/admin/sms" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-100">
-              <MessageSquare className="w-3.5 h-3.5" /> SMS log
+              <MessageSquare className="w-3.5 h-3.5" /> SMS setup
             </Link>
             {auth.isOwner && (
               <Link to="/admin/team" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-100">
@@ -302,7 +341,7 @@ const AdminRescues: React.FC = () => {
             Rescue <span className="text-purple-400">queue</span>
           </h1>
           <p className="text-blue-200/70 text-sm mt-2">
-            Every queued / in-flight / paid rescue task. Click a row to see the linked booking, checkout session, and SMS thread. Use{' '}
+            Every queued / in-flight / paid rescue task. Click a row to see the linked booking, checkout session, and provider log. Use{' '}
             <span className="text-white">Re-send options</span> when a traveler hasn't replied yet.
           </p>
         </div>
@@ -401,7 +440,7 @@ const AdminRescues: React.FC = () => {
                 {visible.map((t) => {
                   const booking = t.booking_id ? bookingMap[t.booking_id] : null;
                   const isOpen = selected === t.id;
-                  const result = t.result || {};
+                  const result = toRescueResult(t.result);
                   const checkoutUrl: string | null = result.checkout_url || null;
                   const sessionId: string | null = result.checkout_session_id || booking?.stripe_session_id || null;
                   return (
@@ -484,8 +523,9 @@ const AdminRescues: React.FC = () => {
 };
 
 const TaskDetail: React.FC<{ task: RescueTask; booking: BookingLite | null; sms: SmsRow[]; checkoutUrl: string | null }> = ({ task, booking, sms, checkoutUrl }) => {
-  const result = task.result || {};
-  const options: any[] = result.options || [];
+  const result = toRescueResult(task.result);
+  const options: RescueOption[] = Array.isArray(result.options) ? result.options : [];
+  const bookingFlightNum = typeof booking?.metadata?.flight_num === 'string' ? booking.metadata.flight_num : null;
   return (
     <div className="grid lg:grid-cols-3 gap-4">
       <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -535,7 +575,7 @@ const TaskDetail: React.FC<{ task: RescueTask; booking: BookingLite | null; sms:
             <div className="text-blue-300/70">Status: <span className="text-white">{booking.status}</span></div>
             <div className="text-blue-300/70">Amount: <span className="text-white">${(booking.amount_cents || 0) / 100}</span></div>
             <div className="text-blue-300/70 font-mono break-all">Stripe: {booking.stripe_session_id || '—'}</div>
-            {booking.metadata?.flight_num && <div className="text-purple-200">Flight: {booking.metadata.flight_num}</div>}
+            {bookingFlightNum && <div className="text-purple-200">Flight: {bookingFlightNum}</div>}
             {result.checkout_booking_id && (
               <div className="text-emerald-300/80 font-mono">Child booking: {String(result.checkout_booking_id).slice(0, 8).toUpperCase()}</div>
             )}
@@ -544,9 +584,9 @@ const TaskDetail: React.FC<{ task: RescueTask; booking: BookingLite | null; sms:
       </div>
 
       <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-2">SMS thread</div>
+        <div className="text-[10px] uppercase tracking-widest text-amber-300 font-bold mb-2">Provider log</div>
         {sms.length === 0 ? (
-          <div className="text-blue-300/50 text-xs">No inbound SMS for this booking yet.</div>
+          <div className="text-blue-300/50 text-xs">No inbound provider messages for this booking yet.</div>
         ) : (
           <ul className="space-y-2 max-h-64 overflow-auto pr-1">
             {sms.map((s) => (

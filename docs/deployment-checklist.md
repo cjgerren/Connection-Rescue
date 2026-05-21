@@ -27,7 +27,7 @@ Notes:
 Create `backend/.env` from `backend/.env.production.example`:
 
 ```bash
-PORT=8787
+PORT=8788
 ALLOWED_ORIGINS=https://connectionrescue.app,https://www.connectionrescue.app
 FRONTEND_URL=https://connectionrescue.app
 AVIATIONSTACK_API_KEY=aviationstack_live_xxx
@@ -69,13 +69,27 @@ Additional app/admin surfaces imply more tables and jobs if you keep those featu
 - `rescue_task_runs`
 - `admin_audit_log`
 
+If you want a non-enumerated owner account for yourself, also set this Supabase Edge Function secret:
+
+- `HIDDEN_OWNER_EMAILS=you@example.com[,another@example.com]`
+- `SERVICE_ROLE_KEY=your-supabase-service-role-key`
+
+Hidden owners are masked in the normal admin UI and excluded from the team listing, but they still retain full owner access server-side.
+
 You also need to decide whether these frontend-called edge functions will exist in production:
 
 - `verify-admin`
 - `manage-admins`
+- `send-booking-email` (Resend)
 - `send-booking-sms`
 - `process-rescue-tasks`
 - `parse-boarding-pass`
+
+Email provider (recommended first):
+
+- `RESEND_API_KEY=...` (Supabase function secret)
+- `RESCUE_EMAIL_FROM=Rescue <rescue@yourdomain.com>` (Supabase function secret)
+- Optional: `RESCUE_EMAIL_REPLY_TO=support@yourdomain.com` (Supabase function secret)
 
 If they will not exist at launch, hide or remove the corresponding UI paths before release.
 
