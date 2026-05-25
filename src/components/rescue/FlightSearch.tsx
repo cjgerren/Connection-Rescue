@@ -56,7 +56,7 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
     return compact;
   };
 
-  const continueWithManualPlan = (flightNumber: string) => {
+  const continueWithManualPlan = (flightNumber: string, reason?: string) => {
     const normalized = flightNumber.trim().toUpperCase().replace(/\s+/g, '');
     const manualFlight: LiveFlight = {
       source: 'manual',
@@ -65,7 +65,7 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
       status: 'MONITORING',
       statusRaw: 'manual',
       delayMinutes: 0,
-      reason: 'Live flight lookup did not return a match. Continue with a manual rescue plan and confirm details with the airline.',
+      reason: reason || 'Live flight lookup did not return a match. Continue with a manual rescue plan and confirm details with the airline.',
       departure: {
         airport: ORIGINAL_FLIGHT.from,
         city: "Chicago O'Hare",
@@ -121,10 +121,22 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
 
       continueWithManualPlan(flightNumber);
       if (normalizedMessage.includes('flight not found')) {
+        continueWithManualPlan(
+          flightNumber,
+          'Live flight lookup did not return a match. Continue with a manual rescue plan and confirm details with the airline.'
+        );
         setError('No live match found. Loaded a manual rescue plan so you can keep moving.');
       } else if (normalizedMessage.includes('could not reach backend') || isFetchFailure) {
+        continueWithManualPlan(
+          flightNumber,
+          'Live tracking backend is unreachable. Continue with a manual rescue plan while backend connection is restored.'
+        );
         setError('Live tracking backend is unreachable. Continue with a manual rescue plan while backend connection is restored.');
       } else {
+        continueWithManualPlan(
+          flightNumber,
+          'Live lookup is temporarily unavailable. Loaded a manual rescue plan so you can keep moving.'
+        );
         setError('Live lookup is temporarily unavailable. Loaded a manual rescue plan so you can keep moving.');
       }
     } finally {
