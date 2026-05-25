@@ -16,6 +16,83 @@ export const RESCUE_SERVICE_FEE_CENTS = parseInt(
   10,
 );
 
+function readErrorMessage(err: unknown) {
+  return String(err instanceof Error ? err.message : err || '').trim();
+}
+
+function isNetworkFetchError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('load failed') ||
+    normalized.includes('network request failed')
+  );
+}
+
+function normalizeFlightCode(raw: string) {
+  return String(raw || '').trim().toUpperCase().replace(/[\s-]+/g, '');
+}
+
+function buildManualDelayInsightFallback(args: {
+  flightNumber: string;
+  date?: string;
+  reason: string;
+}) {
+  const flightNumber = normalizeFlightCode(args.flightNumber) || 'UNKNOWN';
+  const fallbackDate = (args.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  return {
+    flightKey: `${flightNumber}|${fallbackDate}|UNK|UNK`,
+    flight: {
+      source: 'manual',
+      flightNumber,
+      carrier: 'Airline pending',
+      status: 'MONITORING',
+      statusRaw: 'manual',
+      delayMinutes: 0,
+      reason: args.reason,
+      departure: {
+        airport: 'UNK',
+        city: 'Unknown departure airport',
+        gate: null,
+        terminal: null,
+        scheduled: null,
+        estimated: null,
+        actual: null,
+      },
+      arrival: {
+        airport: 'UNK',
+        city: 'Unknown arrival airport',
+        gate: null,
+        terminal: null,
+        scheduled: null,
+        estimated: null,
+        actual: null,
+      },
+      aircraft: null,
+      live: null,
+      usedFallback: true,
+      apiConfigured: !!BACKEND_URL || isSupabaseConfigured,
+    },
+    travelerReportsCount: 0,
+    causeBucket: 'unknown',
+    confidence: 0.15,
+    etaMinMinutes: null,
+    etaMaxMinutes: null,
+    projectedDepartureAt: null,
+    projectedArrivalAt: null,
+    recommendedAction: 'monitor',
+    topSignals: [
+      {
+        bucket: 'unknown',
+        source: 'fallback',
+        message: args.reason,
+      },
+    ],
+    connectionRisk: null,
+  };
+}
+
 async function backendCall<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -43,15 +120,32 @@ async function backendCall<T>(path: string, init: RequestInit = {}): Promise<T> 
 // ---------- Flight status ----------
 export async function getFlightStatus(flightNumber: string) {
   if (BACKEND_URL) {
-    return backendCall(`/api/flights/status?flight=${encodeURIComponent(flightNumber)}`);
+    try {
+      return await backendCall(`/api/flights/status?flight=${encodeURIComponent(flightNumber)}`);
+    } catch (err) {
+      if (!isSupabaseConfigured) throw err;
+      const message = readErrorMessage(err);
+      if (!isNetworkFetchError(message) && !message.toLowerCase().includes('could not reach backend')) {
+        throw err;
+      }
+      // Backend transport issue fallback: try edge function so flight lookup can still work.
+    }
   }
   if (!isSupabaseConfigured) {
     throw new Error('Flight status is not configured. Set VITE_BACKEND_URL or Supabase environment variables.');
   }
   // Fallback: existing Supabase edge function.
-  const { data, error } = await supabase.functions.invoke('flight-status', {
-    body: { flightNumber },
-  });
+  let response;
+  try {
+    response = await supabase.functions.invoke('flight-status', { body: { flightNumber } });
+  } catch (err) {
+    const message = readErrorMessage(err);
+    if (isNetworkFetchError(message)) {
+      throw new Error('Live flight lookup failed due to a network fetch error.');
+    }
+    throw err;
+  }
+  const { data, error } = response;
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   return data;
@@ -75,30 +169,53 @@ export async function getDelayInsight(args: {
     if (args.connectionDepartureAt) params.set('connectionDepartureAt', args.connectionDepartureAt);
     if (args.minimumConnectionMinutes != null) params.set('minimumConnectionMinutes', String(args.minimumConnectionMinutes));
     if (args.connectionKey) params.set('connectionKey', args.connectionKey);
-    return backendCall(`/api/flights/delay-insight?${params.toString()}`);
+    try {
+      return await backendCall(`/api/flights/delay-insight?${params.toString()}`);
+    } catch (err) {
+      const message = readErrorMessage(err);
+      const shouldFallback = isNetworkFetchError(message) || message.toLowerCase().includes('could not reach backend');
+      if (!shouldFallback) throw err;
+      return buildManualDelayInsightFallback({
+        flightNumber: args.flightNumber,
+        date: args.date,
+        reason: 'Live tracking backend is unreachable. Showing a manual rescue plan while connection is restored.',
+      });
+    }
   }
 
-  const flight = await getFlightStatus(args.flightNumber);
-  return {
-    flightKey: `${args.flightNumber}|${args.date || 'unknown'}|${flight?.departure?.airport || 'UNK'}|${flight?.arrival?.airport || 'UNK'}`,
-    flight,
-    travelerReportsCount: 0,
-    causeBucket: 'unknown',
-    confidence: 0.2,
-    etaMinMinutes: Math.max(0, Number(flight?.delayMinutes || 0)),
-    etaMaxMinutes: Math.max(15, Number(flight?.delayMinutes || 0) + 15),
-    projectedDepartureAt: flight?.departure?.estimated || flight?.departure?.scheduled || null,
-    projectedArrivalAt: flight?.arrival?.estimated || flight?.arrival?.scheduled || null,
-    recommendedAction: Number(flight?.delayMinutes || 0) >= 20 ? 'prepare_backup' : 'monitor',
-    topSignals: [
-      {
-        bucket: 'unknown',
-        source: 'flight_status',
-        message: 'Live backend delay insight is not configured; showing status-only fallback.',
-      },
-    ],
-    connectionRisk: null,
-  };
+  try {
+    const flight = await getFlightStatus(args.flightNumber);
+    return {
+      flightKey: `${args.flightNumber}|${args.date || 'unknown'}|${flight?.departure?.airport || 'UNK'}|${flight?.arrival?.airport || 'UNK'}`,
+      flight,
+      travelerReportsCount: 0,
+      causeBucket: 'unknown',
+      confidence: 0.2,
+      etaMinMinutes: Math.max(0, Number(flight?.delayMinutes || 0)),
+      etaMaxMinutes: Math.max(15, Number(flight?.delayMinutes || 0) + 15),
+      projectedDepartureAt: flight?.departure?.estimated || flight?.departure?.scheduled || null,
+      projectedArrivalAt: flight?.arrival?.estimated || flight?.arrival?.scheduled || null,
+      recommendedAction: Number(flight?.delayMinutes || 0) >= 20 ? 'prepare_backup' : 'monitor',
+      topSignals: [
+        {
+          bucket: 'unknown',
+          source: 'flight_status',
+          message: 'Live backend delay insight is not configured; showing status-only fallback.',
+        },
+      ],
+      connectionRisk: null,
+    };
+  } catch (err) {
+    const message = readErrorMessage(err);
+    if (isNetworkFetchError(message) || message.toLowerCase().includes('live flight lookup failed')) {
+      return buildManualDelayInsightFallback({
+        flightNumber: args.flightNumber,
+        date: args.date,
+        reason: 'Live flight lookup failed. Showing a manual rescue plan while network access is restored.',
+      });
+    }
+    throw err;
+  }
 }
 
 export async function submitDelayReport(payload: {

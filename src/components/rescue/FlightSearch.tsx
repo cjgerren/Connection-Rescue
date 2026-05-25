@@ -109,12 +109,17 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
     } catch (err: unknown) {
       const message = String(err instanceof Error ? err.message : '');
       const normalizedMessage = message.toLowerCase().replace(/_/g, ' ');
+      const isFetchFailure =
+        normalizedMessage.includes('failed to fetch') ||
+        normalizedMessage.includes('networkerror') ||
+        normalizedMessage.includes('network request failed') ||
+        normalizedMessage.includes('load failed');
       if (normalizedMessage.includes('flight not found')) {
         continueWithManualPlan(flightNumber);
         setError('No live match found. Loaded a manual rescue plan so you can keep moving.');
       } else if (normalizedMessage.includes('invalid flight code')) {
         setError('Use airline + number (example: AA3828), or just digits (example: 3828).');
-      } else if (normalizedMessage.includes('could not reach backend')) {
+      } else if (normalizedMessage.includes('could not reach backend') || isFetchFailure) {
         setError('Live tracking backend is unreachable. Continue with a manual rescue plan while backend connection is restored.');
       } else {
         setError(message || 'Could not fetch flight status');
