@@ -27,6 +27,16 @@ const formatTime = (iso: string | null) => {
   }
 };
 
+const hasKnownCode = (value: string | null | undefined) => {
+  const code = String(value || '').trim().toUpperCase();
+  return !!code && code !== 'UNK' && code !== 'UNKNOWN';
+};
+
+const hasKnownCity = (value: string | null | undefined) => {
+  const text = String(value || '').trim();
+  return !!text && !text.toLowerCase().startsWith('unknown');
+};
+
 const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated, onPersonalize, onViewPricing, onStartDemo, demoMode }) => {
   const { profile, hasProfile } = useTraveler();
   const bp = profile.boardingPass;
@@ -41,16 +51,23 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
 
   // Pick display values from live flight, then scanned boarding pass, then location/demo.
   const flightNum = liveFlight?.flightNumber || bp?.flightNumber || ORIGINAL_FLIGHT.flightNum;
-  const fromCode = liveFlight?.departure.airport || bp?.from || nearest?.airport.code || ORIGINAL_FLIGHT.from;
-  const fromCity = liveFlight?.departure.city || bp?.fromCity || getAirportCity(fromCode, "Chicago O'Hare");
-  const toCode = liveFlight?.arrival.airport || bp?.to || ORIGINAL_FLIGHT.to;
-  const toCity = liveFlight?.arrival.city || bp?.toCity || getAirportCity(toCode, ORIGINAL_FLIGHT.toCity);
+  const liveFromCode = hasKnownCode(liveFlight?.departure.airport) ? String(liveFlight?.departure.airport) : null;
+  const liveToCode = hasKnownCode(liveFlight?.arrival.airport) ? String(liveFlight?.arrival.airport) : null;
+  const fromCode = liveFromCode || bp?.from || nearest?.airport.code || ORIGINAL_FLIGHT.from;
+  const toCode = liveToCode || bp?.to || ORIGINAL_FLIGHT.to;
+  const liveFromCity = hasKnownCity(liveFlight?.departure.city) ? String(liveFlight?.departure.city) : null;
+  const liveToCity = hasKnownCity(liveFlight?.arrival.city) ? String(liveFlight?.arrival.city) : null;
+  const fromCity = liveFromCity || bp?.fromCity || getAirportCity(fromCode, "Chicago O'Hare");
+  const toCity = liveToCity || bp?.toCity || getAirportCity(toCode, ORIGINAL_FLIGHT.toCity);
   const departTime = liveFlight ? formatTime(liveFlight.departure.scheduled) : bp?.departureTime || ORIGINAL_FLIGHT.scheduled;
   const gate = liveFlight?.departure.gate || bp?.gate || ORIGINAL_FLIGHT.gate;
   const status = liveFlight?.status || (bp ? 'MONITORING' : 'CANCELED');
   const reason = liveFlight?.reason || (bp ? 'Boarding pass scanned. Live disruption status will appear when flight monitoring returns a match.' : ORIGINAL_FLIGHT.reason);
   const carrier = liveFlight?.carrier || bp?.carrier || 'American Airlines';
   const delayMin = liveFlight?.delayMinutes || 0;
+  const manualModeMessage = (liveFlight?.reason || '').toLowerCase().includes('unreachable')
+    ? 'Live tracking backend is unreachable, so rescue planning is using a fallback route. Confirm details with the airline before acting.'
+    : 'Live flight lookup did not return a match, so rescue planning is using a fallback route. Confirm details with the airline before acting.';
 
   const statusColor = isDisrupted ? 'red' : 'emerald';
 
@@ -68,7 +85,7 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
           <div className="mb-6 inline-flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-100 text-xs max-w-2xl backdrop-blur">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <p>
-              <span className="font-semibold">Manual mode:</span> Live flight lookup did not return a match, so rescue planning is using a fallback route. Confirm details with the airline before acting.
+              <span className="font-semibold">Manual mode:</span> {manualModeMessage}
             </p>
           </div>
         )}

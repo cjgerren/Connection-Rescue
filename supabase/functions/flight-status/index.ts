@@ -21,6 +21,8 @@ interface FlightStatusRequest {
 interface AircraftRecord {
   flight?: string | null;
   desc?: string | null;
+  ownOp?: string | null;
+  r?: string | null;
   lat?: number | null;
   lon?: number | null;
   alt_baro?: number | null;
@@ -102,7 +104,7 @@ async function fetchAirplanesLiveByCallsign(callsign: string): Promise<AircraftR
 
 function toLiveFlight(ac: AircraftRecord, requestedFlight: string, source: 'adsb.lol' | 'airplanes.live') {
   const callSign = String(ac.flight || requestedFlight || '').trim();
-  const label = String(ac.desc || '').trim();
+  const label = String(ac.ownOp || '').trim() || String(ac.desc || '').trim();
   return {
     source,
     flightNumber: callSign || requestedFlight,
@@ -110,7 +112,7 @@ function toLiveFlight(ac: AircraftRecord, requestedFlight: string, source: 'adsb
     status: (ac.seen ?? 9_999) <= 30 ? 'IN AIR' : 'MONITORING',
     statusRaw: 'adsb_live',
     delayMinutes: 0,
-    reason: null,
+    reason: 'Free live feed confirms this aircraft is in air, but route metadata (origin/destination) is not provided for this record.',
     departure: {
       airport: 'UNK',
       city: 'Unknown departure airport',
@@ -151,20 +153,24 @@ async function lookupFlight(normalized: string) {
   const icao = iataToIcao[parsed.carrier];
   if (icao) candidates.add(`${icao}${parsed.number}`);
 
+  const combined: Array<{ source: 'adsb.lol' | 'airplanes.live'; record: AircraftRecord }> = [];
   for (const callsign of candidates) {
-    const records = await fetchAdsbLolByCallsign(callsign);
-    if (records.length) {
-      records.sort((a, b) => Number(a.seen ?? 9_999) - Number(b.seen ?? 9_999));
-      return { error: null, data: toLiveFlight(records[0], normalized, 'adsb.lol') };
+    for (const record of await fetchAdsbLolByCallsign(callsign)) {
+      combined.push({ source: 'adsb.lol', record });
+    }
+    for (const record of await fetchAirplanesLiveByCallsign(callsign)) {
+      combined.push({ source: 'airplanes.live', record });
     }
   }
-
-  for (const callsign of candidates) {
-    const records = await fetchAirplanesLiveByCallsign(callsign);
-    if (records.length) {
-      records.sort((a, b) => Number(a.seen ?? 9_999) - Number(b.seen ?? 9_999));
-      return { error: null, data: toLiveFlight(records[0], normalized, 'airplanes.live') };
-    }
+  if (combined.length) {
+    combined.sort((a, b) => {
+      const aScore = (a.record.ownOp ? 4 : 0) + (a.record.desc ? 3 : 0) + (a.record.r ? 1 : 0);
+      const bScore = (b.record.ownOp ? 4 : 0) + (b.record.desc ? 3 : 0) + (b.record.r ? 1 : 0);
+      if (aScore !== bScore) return bScore - aScore;
+      return Number(a.record.seen ?? 9_999) - Number(b.record.seen ?? 9_999);
+    });
+    const best = combined[0];
+    return { error: null, data: toLiveFlight(best.record, normalized, best.source) };
   }
 
   return { error: 'flight_not_found' as const, data: null };
