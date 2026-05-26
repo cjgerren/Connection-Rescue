@@ -21,6 +21,22 @@ function readErrorMessage(err: unknown) {
   return String(err instanceof Error ? err.message : err || '').trim();
 }
 
+async function readFunctionErrorBody(err: unknown): Promise<string | null> {
+  const candidate = err as { context?: { json?: () => Promise<unknown> } } | null;
+  const parser = candidate?.context?.json;
+  if (typeof parser !== 'function') return null;
+  try {
+    const payload = await parser();
+    if (!payload || typeof payload !== 'object') return null;
+    const value = (payload as { error?: unknown; message?: unknown }).error
+      ?? (payload as { error?: unknown; message?: unknown }).message;
+    if (typeof value !== 'string') return null;
+    return value.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function isNetworkFetchError(message: string) {
   const normalized = message.toLowerCase();
   return (
@@ -147,7 +163,11 @@ export async function getFlightStatus(flightNumber: string) {
     throw err;
   }
   const { data, error } = response;
-  if (error) throw new Error(error.message);
+  if (error) {
+    const detailed = await readFunctionErrorBody(error);
+    if (detailed) throw new Error(detailed);
+    throw new Error(error.message);
+  }
   if (data?.error) throw new Error(data.error);
   return data;
 }
