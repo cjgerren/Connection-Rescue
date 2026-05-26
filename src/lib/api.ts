@@ -9,6 +9,7 @@
 // or in `import.meta.env` — they live only on the backend.
 
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { getAirlineName } from '@/lib/airlineNames';
 
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, '') || '';
 export const RESCUE_SERVICE_FEE_CENTS = parseInt(
@@ -46,7 +47,7 @@ function buildManualDelayInsightFallback(args: {
     flight: {
       source: 'manual',
       flightNumber,
-      carrier: 'Airline pending',
+      carrier: getAirlineName(flightNumber),
       status: 'MONITORING',
       statusRaw: 'manual',
       delayMinutes: 0,

@@ -46,6 +46,21 @@ function parseFlightCode(code: string) {
   return { carrier: match[1], number: match[2] };
 }
 
+function getAirlineName(flightNumber = '') {
+  const code = String(flightNumber).toUpperCase();
+
+  if (code.startsWith('AA')) return 'American Airlines';
+  if (code.startsWith('DL')) return 'Delta Air Lines';
+  if (code.startsWith('UA')) return 'United Airlines';
+  if (code.startsWith('WN')) return 'Southwest Airlines';
+  if (code.startsWith('B6')) return 'JetBlue';
+  if (code.startsWith('AS')) return 'Alaska Airlines';
+  if (code.startsWith('NK')) return 'Spirit Airlines';
+  if (code.startsWith('F9')) return 'Frontier Airlines';
+
+  return 'Tracked Flight';
+}
+
 const iataToIcao: Record<string, string> = {
   AA: 'AAL',
   AS: 'ASA',
@@ -56,6 +71,11 @@ const iataToIcao: Record<string, string> = {
   NK: 'NKS',
   UA: 'UAL',
   WN: 'SWA',
+  PT: 'PDT',
+  OH: 'JIA',
+  MQ: 'ENY',
+  '9E': 'EDV',
+  YX: 'RPA',
 };
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -86,7 +106,7 @@ function toLiveFlight(ac: AircraftRecord, requestedFlight: string, source: 'adsb
   return {
     source,
     flightNumber: callSign || requestedFlight,
-    carrier: label || 'Airline pending',
+    carrier: label || getAirlineName(callSign || requestedFlight),
     status: (ac.seen ?? 9_999) <= 30 ? 'IN AIR' : 'MONITORING',
     statusRaw: 'adsb_live',
     delayMinutes: 0,

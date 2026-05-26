@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Loader2, AlertCircle } from 'lucide-react';
 import { getDelayInsight } from '@/lib/api';
+import { getAirlineName } from '@/lib/airlineNames';
 import type { DelayInsight } from './DelayInsightCard';
 import { mergeDelayInsightResponse } from '@/lib/delayInsight';
 import { ORIGINAL_FLIGHT } from '@/data/rescueData';
@@ -61,7 +62,7 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
     const manualFlight: LiveFlight = {
       source: 'manual',
       flightNumber: normalized || ORIGINAL_FLIGHT.flightNum.replace(/\s+/g, ''),
-      carrier: 'getAirlineName(flightNumber)',
+      carrier: getAirlineName(normalized || ORIGINAL_FLIGHT.flightNum.replace(/\s+/g, '')),
       status: 'MONITORING',
       statusRaw: 'manual',
       delayMinutes: 0,
@@ -118,8 +119,6 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
         setError('Use airline + number (example: AA3828), or just digits (example: 3828).');
         return;
       }
-
-      continueWithManualPlan(flightNumber);
       if (normalizedMessage.includes('flight not found')) {
         continueWithManualPlan(
           flightNumber,
