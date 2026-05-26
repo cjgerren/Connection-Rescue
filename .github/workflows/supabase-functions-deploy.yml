@@ -38,6 +38,7 @@ jobs:
 
       - name: Deploy Edge Functions
         run: |
+          npx supabase functions deploy flight-status --project-ref "$SUPABASE_PROJECT_REF"
           npx supabase functions deploy verify-admin --project-ref "$SUPABASE_PROJECT_REF"
           npx supabase functions deploy manage-admins --project-ref "$SUPABASE_PROJECT_REF"
           npx supabase functions deploy send-booking-email --project-ref "$SUPABASE_PROJECT_REF"

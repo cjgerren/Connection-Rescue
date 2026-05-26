@@ -61,7 +61,7 @@ const FlightSearch: React.FC<Props> = ({ onResult, compact }) => {
     const manualFlight: LiveFlight = {
       source: 'manual',
       flightNumber: normalized || ORIGINAL_FLIGHT.flightNum.replace(/\s+/g, ''),
-      carrier: 'Airline pending',
+      carrier: 'getAirlineName(flightNumber)',
       status: 'MONITORING',
       statusRaw: 'manual',
       delayMinutes: 0,
