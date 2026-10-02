@@ -6,7 +6,7 @@ This is **not** a claim that the product is production- or airline-ready. Week 1
 
 **Scope lock:** one hub, one cancel/misconnect script, guidance + handoff only (tickets booked outside the app). Pitch **weeks-to-pilot**, not full IROPS / Amadeus–Sabre class.
 
-Related: [production-readiness-board.md](./production-readiness-board.md), repo README.
+Related: [dfw-pilot-feature-kill-list.md](./dfw-pilot-feature-kill-list.md), [production-readiness-board.md](./production-readiness-board.md), repo README.
 
 ---
 
@@ -29,14 +29,19 @@ Related: [production-readiness-board.md](./production-readiness-board.md), repo 
 - [ ] Document “what the demo proves” vs “what it does not” (no in-app ticketing, no full rebooking automation)
 
 ### Feature kill / hide list (MVP honesty)
-Hide or disable until schema + workers exist (see readiness board):
-- [ ] Boarding-pass parsing (`parse-boarding-pass`)
-- [ ] SMS rescue-task flows (`send-booking-sms`) unless explicitly in pilot
-- [ ] Public alerts history that relies on email-only / localStorage identity
-- [ ] Admin team flows that call missing `manage-admins` / `verify-admin` **or** stub them for staging only
-- [ ] Any UI that implies automated rebooking
+Hide or disable until schema + workers exist (see readiness board).
 
-**Owner:** draft kill-list in PR → Charles approves before merge.
+**Day-1 kill-list (DFW):** [dfw-pilot-feature-kill-list.md](./dfw-pilot-feature-kill-list.md) — scope lock (DFW, Stripe test, guidance+handoff), kill/hide vs KEEP tables, explicit non-claims.
+
+Checklist (mirror of that doc; Charles approves before merge):
+- [ ] Boarding-pass parsing (`parse-boarding-pass`) / Personalize scan demo
+- [ ] SMS rescue-task flows (`send-booking-sms`) / `/admin/sms` send path unless explicitly in pilot
+- [ ] Public alerts history (`/alerts`) — OTP+email path still fragile for pilot honesty
+- [ ] Admin team flows (`manage-admins` / `verify-admin` / `/admin/team`) **or** single seeded admin only
+- [ ] `process-rescue-tasks` force-run / worker panel unless staging-backed
+- [ ] Any UI/copy that implies automated in-app rebooking or ticket purchase
+
+**Owner:** kill-list doc in PR → Charles approves before merge.
 
 ---
 
