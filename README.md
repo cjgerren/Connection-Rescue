@@ -83,6 +83,7 @@ npm run build
 - `docs/mobile-app-plan.md`
 - `docs/delay-insight-engine-spec.md`
 - `docs/production-readiness-board.md`
+- `docs/airline-pilot-week1-checklist.md`
 - `.env.production.example`
 - `backend/.env.production.example`
 
