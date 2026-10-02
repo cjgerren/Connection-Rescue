@@ -82,7 +82,7 @@ npm run build
 - `docs/hosting-env-matrix.md`
 - `docs/mobile-app-plan.md`
 - `docs/delay-insight-engine-spec.md`
-- `docs/production-readiness-board.md
+- `docs/production-readiness-board.md`
 - `docs/airline-pilot-week1-checklist.md`
 - `.env.production.example`
 - `backend/.env.production.example`
