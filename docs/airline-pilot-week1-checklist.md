@@ -6,15 +6,15 @@ This is **not** a claim that the product is production- or airline-ready. Week 1
 
 **Scope lock:** one hub, one cancel/misconnect script, guidance + handoff only (tickets booked outside the app). Pitch **weeks-to-pilot**, not full IROPS / Amadeus–Sabre class.
 
-Related: [production-readiness-board.md](./production-readiness-board.md), repo README.
+Related: [dfw-pilot-cancel-scenario.md](./dfw-pilot-cancel-scenario.md), [dfw-pilot-feature-kill-list.md](./dfw-pilot-feature-kill-list.md), [production-readiness-board.md](./production-readiness-board.md), repo README.
 
 ---
 
 ## Day 0 — Decisions (Charles)
 
-- [ ] Hub + airport code for the pilot (e.g. DFW / ORD / ATL)
-- [ ] Cancel script: inbound delayed/cancelled → missed connection → assist path
-- [ ] Payment mode for pilot: **Stripe test** Rescue Assist **or** **$0 airline-sponsored** flag (no live charges)
+- [x] Hub + airport code for the pilot — **DFW** locked (see [dfw-pilot-cancel-scenario.md](./dfw-pilot-cancel-scenario.md))
+- [x] Cancel script: inbound delayed/cancelled → missed connection → assist path — [dfw-pilot-cancel-scenario.md](./dfw-pilot-cancel-scenario.md)
+- [x] Payment mode for pilot: **Stripe test** Rescue Assist ($14.99 look, no live charges) — $0 sponsored remains optional later
 - [ ] Deep-link targets: airline site, OTA, or both (URLs / rules)
 - [ ] PNR/CSV sample format from ops (columns: PNR, name, flight, contact, status)
 - [ ] Staging hosts: frontend URL, backend URL, one Supabase project
@@ -24,19 +24,22 @@ Related: [production-readiness-board.md](./production-readiness-board.md), repo 
 ## Day 1 — Scenario + honesty cuts
 
 ### Scenario pack
-- [ ] Write the traveler script (happy path + one failure: flight not found / checkout abandoned)
-- [ ] Pick one sample itinerary (flight numbers, times, connection) that AviationStack can resolve in staging
-- [ ] Document “what the demo proves” vs “what it does not” (no in-app ticketing, no full rebooking automation)
+**DFW cancel/misconnect script:** [dfw-pilot-cancel-scenario.md](./dfw-pilot-cancel-scenario.md) (traveler + admin steps, DEMO itinerary, failure path, demo-day cold start).
+
+- [ ] Write the traveler script (happy path + one failure: flight not found / checkout abandoned) — draft in scenario doc; Charles approves live flight swap
+- [ ] Pick one sample itinerary (flight numbers, times, connection) that AviationStack can resolve in staging — DEMO placeholders in scenario doc until swapped
+- [ ] Document “what the demo proves” vs “what it does not” (no in-app ticketing, no full rebooking automation) — see scenario doc §8
 
 ### Feature kill / hide list (MVP honesty)
-Hide or disable until schema + workers exist (see readiness board):
+Hide or disable until schema + workers exist (see readiness board). Full table: [dfw-pilot-feature-kill-list.md](./dfw-pilot-feature-kill-list.md) (open PR if not yet on `main`).
+
 - [ ] Boarding-pass parsing (`parse-boarding-pass`)
 - [ ] SMS rescue-task flows (`send-booking-sms`) unless explicitly in pilot
 - [ ] Public alerts history that relies on email-only / localStorage identity
 - [ ] Admin team flows that call missing `manage-admins` / `verify-admin` **or** stub them for staging only
 - [ ] Any UI that implies automated rebooking
 
-**Owner:** draft kill-list in PR → Charles approves before merge.
+**Owner:** kill-list PR → Charles approves before merge.
 
 ---
 
