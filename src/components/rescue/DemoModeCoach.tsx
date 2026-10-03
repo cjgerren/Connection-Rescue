@@ -11,6 +11,7 @@ interface DemoModeCoachProps {
   };
   onNext: () => void;
   onClose: () => void;
+  optionsUnlocked?: boolean;
 }
 
 const STEP_COPY = [
@@ -41,10 +42,15 @@ const STEP_COPY = [
   },
 ];
 
-const DemoModeCoach: React.FC<DemoModeCoachProps> = ({ active, step, completed, onNext, onClose }) => {
+const DemoModeCoach: React.FC<DemoModeCoachProps> = ({ active, step, completed, onNext, onClose, optionsUnlocked = false }) => {
   if (!active) return null;
 
-  const current = STEP_COPY[Math.min(step, STEP_COPY.length - 1)];
+  const current = { ...STEP_COPY[Math.min(step, STEP_COPY.length - 1)] };
+  if (!optionsUnlocked && step >= 1 && step < 4) {
+    current.title = 'Rescue Assist comes before options';
+    current.desc = 'Disruption status is free. Replacement flights, hotels, and lounges stay hidden until Stripe checkout is confirmed.';
+    current.cta = 'Review Rescue Assist';
+  }
   const progress = Math.min(step + 1, STEP_COPY.length);
 
   return (

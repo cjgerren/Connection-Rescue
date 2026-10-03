@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Coffee, MapPin, Star, Check, ArrowRight, KeyRound, CreditCard, Wifi, Users, Info } from 'lucide-react';
 import { LOUNGES, Lounge } from '@/data/rescueData';
+import { loungeHandoffUrl } from '@/lib/handoff.mjs';
 import { useTraveler } from '@/contexts/TravelerContext';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   loungeOptions?: Lounge[];
   inventoryCoverage?: 'supabase' | 'fallback';
   loadingOptions?: boolean;
+  airportCode?: string;
 }
 
 const LoungeAccess: React.FC<Props> = ({
@@ -17,6 +19,7 @@ const LoungeAccess: React.FC<Props> = ({
   loungeOptions = LOUNGES,
   inventoryCoverage = 'fallback',
   loadingOptions = false,
+  airportCode,
 }) => {
   const { profile } = useTraveler();
   const [filter, setFilter] = useState<'all' | 'access' | 'closest'>('all');
@@ -169,30 +172,31 @@ const LoungeAccess: React.FC<Props> = ({
                           </>
                         )}
                       </div>
-                      <button
-                        onClick={() => setSelectedLounge(selected ? null : lounge)}
+                      <a
+                        href={loungeHandoffUrl({
+                          name: lounge.name,
+                          terminal: lounge.terminal,
+                          airport: airportCode,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setSelectedLounge(lounge)}
                         className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1 ${
-                          selected
-                            ? 'bg-emerald-600 text-white'
-                            : lounge.hasAccess
+                          lounge.hasAccess
                             ? 'bg-red-600 hover:bg-red-700 text-white'
                             : 'bg-blue-950 hover:bg-blue-900 text-white'
                         }`}
                       >
-                        {selected ? (
+                        {lounge.hasAccess ? (
                           <>
-                            <Check className="w-3.5 h-3.5" /> Reserved
-                          </>
-                        ) : lounge.hasAccess ? (
-                          <>
-                            Enter Lounge <ArrowRight className="w-3.5 h-3.5" />
+                            Open lounge <ArrowRight className="w-3.5 h-3.5" />
                           </>
                         ) : (
                           <>
-                            <CreditCard className="w-3.5 h-3.5" /> Buy Pass
+                            <CreditCard className="w-3.5 h-3.5" /> Open day pass
                           </>
                         )}
-                      </button>
+                      </a>
                     </div>
                   </div>
                 </div>

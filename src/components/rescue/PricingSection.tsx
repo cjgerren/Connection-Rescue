@@ -76,8 +76,8 @@ const PricingSection: React.FC = () => {
         <div>
           <h2 className="text-3xl lg:text-4xl font-bold text-slate-900">Keep the rescue fee small. Charge only when it helps.</h2>
           <p className="mt-3 max-w-3xl text-slate-600 text-sm sm:text-base leading-relaxed">
-            Travelers still pay for the replacement flight, hotel, or lounge they choose. ConnectionRescue should charge a separate
-            one-time assist fee for the recovery workflow, not a fake concierge promise you do not staff yet.
+            Flight status is free. Replacement flights, hotels, and lounges stay hidden until the one-time Rescue Assist checkout is confirmed.
+            Tickets are still purchased with the airline. This is not a staffed concierge promise, and it is not production-ready.
           </p>
         </div>
       </div>

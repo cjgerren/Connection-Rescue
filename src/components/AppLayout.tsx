@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Header from './rescue/Header';
 import Hero from './rescue/Hero';
 import RescuePlan from './rescue/RescuePlan';
@@ -10,10 +11,13 @@ import DemoModeCoach from './rescue/DemoModeCoach';
 import Footer from './rescue/Footer';
 import ConfirmationBar from './rescue/ConfirmationBar';
 import PersonalizeModal from './rescue/PersonalizeModal';
+import RescueAssistGate from './rescue/RescueAssistGate';
 import { Flight, Hotel, Lounge, ORIGINAL_FLIGHT } from '@/data/rescueData';
 import { LiveFlight } from './rescue/FlightSearch';
 import { useTraveler } from '@/contexts/TravelerContext';
 import { useRescueInventory } from '@/hooks/useRescueInventory';
+import { useRescueAccess } from '@/hooks/useRescueAccess';
+import { RESCUE_SERVICE_FEE_CENTS } from '@/lib/api';
 
 const AppLayout: React.FC = () => {
   const [activeView, setActiveView] = useState('rescue');
@@ -24,12 +28,31 @@ const AppLayout: React.FC = () => {
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
+  const [searchParams] = useSearchParams();
   const { hasProfile, profile } = useTraveler();
+  const displayedFlightNumber = liveFlight?.flightNumber
+    || searchParams.get('flight')
+    || profile.boardingPass?.flightNumber
+    || ORIGINAL_FLIGHT.flightNum;
+  const assistPrice = `$${(RESCUE_SERVICE_FEE_CENTS / 100).toFixed(2)}`;
+  const access = useRescueAccess(displayedFlightNumber);
+  const optionsUnlocked = access.unlocked;
   const inventory = useRescueInventory({
     airportIata: liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from,
     destinationIata: liveFlight?.arrival.airport || profile.boardingPass?.to || ORIGINAL_FLIGHT.to,
     destinationCity: liveFlight?.arrival.city || profile.boardingPass?.toCity || ORIGINAL_FLIGHT.toCity,
+    enabled: optionsUnlocked,
   });
+  const routeLabel = `${liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from} → ${liveFlight?.arrival.airport || profile.boardingPass?.to || ORIGINAL_FLIGHT.to}`;
+
+  const requestView = (view: string) => {
+    const gated = view === 'flights' || view === 'hotels' || view === 'lounges';
+    if (gated && !optionsUnlocked) {
+      setActiveView('rescue-assist');
+      return;
+    }
+    setActiveView(view);
+  };
 
   // Auto-open the personalize modal on first visit (no setup yet)
   useEffect(() => {
@@ -120,7 +143,11 @@ const AppLayout: React.FC = () => {
     if (demoStep === 0) {
       runDemoFlight();
       setDemoStep(1);
-      setActiveView('flights');
+      setActiveView(optionsUnlocked ? 'flights' : 'rescue-assist');
+      return;
+    }
+    if (!optionsUnlocked) {
+      setActiveView('rescue-assist');
       return;
     }
     if (demoStep === 1) {
@@ -145,7 +172,7 @@ const AppLayout: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!demoMode) return;
+    if (!demoMode || !optionsUnlocked) return;
 
     if (demoStep === 1 && selectedFlight) {
       setDemoStep(2);
@@ -160,7 +187,14 @@ const AppLayout: React.FC = () => {
     if (demoStep === 3 && selectedLounge) {
       setDemoStep(4);
     }
-  }, [demoMode, demoStep, selectedFlight, selectedHotel, selectedLounge]);
+  }, [demoMode, demoStep, selectedFlight, selectedHotel, selectedLounge, optionsUnlocked]);
+
+  useEffect(() => {
+    if (optionsUnlocked) return;
+    setSelectedFlight(null);
+    setSelectedHotel(null);
+    setSelectedLounge(null);
+  }, [optionsUnlocked]);
 
   const sectionHighlight = (section: 'flights' | 'hotels' | 'lounges') => {
     if (!demoMode) return '';
@@ -174,7 +208,7 @@ const AppLayout: React.FC = () => {
     <div className="min-h-screen bg-white">
       <Header
         activeView={activeView}
-        setActiveView={setActiveView}
+        setActiveView={requestView}
         onFlightFound={handleFlightFound}
         onOpenPersonalize={() => setPersonalizeOpen(true)}
         onStartDemo={startDemoMode}
@@ -186,14 +220,18 @@ const AppLayout: React.FC = () => {
         completed={{ flight: !!selectedFlight, hotel: !!selectedHotel, lounge: !!selectedLounge }}
         onNext={runDemoStep}
         onClose={stopDemoMode}
+        optionsUnlocked={optionsUnlocked}
       />
       <main>
         <Hero
-          onStartRescue={() => setActiveView('flights')}
+          onStartRescue={() => requestView(optionsUnlocked ? 'flights' : 'rescue-assist')}
+          optionsUnlocked={optionsUnlocked}
+          assistPrice={assistPrice}
           liveFlight={liveFlight}
+          fallbackFlightNumber={displayedFlightNumber}
           onFlightUpdated={handleFlightUpdated}
           onPersonalize={() => setPersonalizeOpen(true)}
-          onViewPricing={() => setActiveView('pricing')}
+          onViewPricing={() => requestView('pricing')}
           onStartDemo={startDemoMode}
           demoMode={demoMode}
         />
@@ -201,37 +239,53 @@ const AppLayout: React.FC = () => {
           selectedFlight={selectedFlight}
           selectedHotel={selectedHotel}
           selectedLounge={selectedLounge}
-          onJump={setActiveView}
+          onJump={requestView}
+          locked={!optionsUnlocked}
         />
         <PricingSection />
-        <div className={`transition-shadow ${sectionHighlight('flights')}`}>
-          <FlightRebook
-            selectedFlight={selectedFlight}
-            setSelectedFlight={setSelectedFlight}
-            liveFlight={liveFlight}
-            flightOptions={inventory.flights}
-            inventoryCoverage={inventory.coverage.flights}
-            loadingOptions={inventory.loading}
+        {optionsUnlocked ? (
+          <div data-testid="rescue-options" data-rescue-options="unlocked">
+            <div className={`transition-shadow ${sectionHighlight('flights')}`}>
+              <FlightRebook
+                selectedFlight={selectedFlight}
+                setSelectedFlight={setSelectedFlight}
+                liveFlight={liveFlight}
+          fallbackFlightNumber={displayedFlightNumber}
+                flightOptions={inventory.flights}
+                inventoryCoverage={inventory.coverage.flights}
+                loadingOptions={inventory.loading}
+              />
+            </div>
+            <div className={`transition-shadow ${sectionHighlight('hotels')}`}>
+              <HotelRescue
+                selectedHotel={selectedHotel}
+                setSelectedHotel={setSelectedHotel}
+                hotelOptions={inventory.hotels}
+                inventoryCoverage={inventory.coverage.hotels}
+                loadingOptions={inventory.loading}
+                airportCode={liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from}
+              />
+            </div>
+            <div className={`transition-shadow ${sectionHighlight('lounges')}`}>
+              <LoungeAccess
+                selectedLounge={selectedLounge}
+                setSelectedLounge={setSelectedLounge}
+                loungeOptions={inventory.lounges}
+                inventoryCoverage={inventory.coverage.lounges}
+                loadingOptions={inventory.loading}
+                airportCode={liveFlight?.departure.airport || profile.boardingPass?.from || ORIGINAL_FLIGHT.from}
+              />
+            </div>
+          </div>
+        ) : (
+          <RescueAssistGate
+            flightNumber={displayedFlightNumber}
+            flightKey={access.flightKey || displayedFlightNumber.replace(/\s+/g, '').toUpperCase()}
+            sessionId={access.sessionId}
+            routeLabel={routeLabel}
+            travelerName={profile.boardingPass?.passengerName ?? undefined}
           />
-        </div>
-        <div className={`transition-shadow ${sectionHighlight('hotels')}`}>
-          <HotelRescue
-            selectedHotel={selectedHotel}
-            setSelectedHotel={setSelectedHotel}
-            hotelOptions={inventory.hotels}
-            inventoryCoverage={inventory.coverage.hotels}
-            loadingOptions={inventory.loading}
-          />
-        </div>
-        <div className={`transition-shadow ${sectionHighlight('lounges')}`}>
-          <LoungeAccess
-            selectedLounge={selectedLounge}
-            setSelectedLounge={setSelectedLounge}
-            loungeOptions={inventory.lounges}
-            inventoryCoverage={inventory.coverage.lounges}
-            loadingOptions={inventory.loading}
-          />
-        </div>
+        )}
       </main>
       <Footer />
       <ConfirmationBar

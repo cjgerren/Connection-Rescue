@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Plane, Mail, Receipt, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, Plane, Mail, Receipt, ArrowRight, Loader2, Lock } from 'lucide-react';
 import { getCheckoutStatus } from '@/lib/api';
 import Footer from '@/components/rescue/Footer';
+import { isConfirmedCheckout, loadAssistStore, rememberConfirmation, saveAssistStore } from '@/lib/rescueAccess.mjs';
 
 interface Booking {
   id: string;
@@ -15,15 +16,20 @@ interface Booking {
   created_at: string | null;
 }
 
+type Outcome = 'loading' | 'confirmed' | 'pending' | 'error' | 'missing';
+
 const BookingSuccess: React.FC = () => {
   const [params] = useSearchParams();
   const sessionId = params.get('session_id');
+  const rescueSessionId = params.get('rescue_session');
+  const flightKey = params.get('flight');
   const [booking, setBooking] = useState<Booking | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [outcome, setOutcome] = useState<Outcome>(sessionId ? 'loading' : 'missing');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
-      setLoading(false);
+      setOutcome('missing');
       return;
     }
 
@@ -31,35 +37,69 @@ const BookingSuccess: React.FC = () => {
     let attempts = 0;
 
     const fetchBooking = async () => {
-      let keepPolling = false;
       try {
         const data = await getCheckoutStatus(sessionId);
         if (cancelled) return;
 
-        if (data.booking) {
-          setBooking(data.booking as Booking);
-          if (!['paid', 'confirmed', 'booked'].includes(data.booking.status) && attempts < 8) {
-            attempts++;
-            keepPolling = true;
-            setTimeout(fetchBooking, 1500);
-            return;
-          }
-        } else if (attempts < 8) {
-          attempts++;
-          keepPolling = true;
+        if (data.booking) setBooking(data.booking as Booking);
+
+        const confirmed = isConfirmedCheckout({
+          bookingStatus: data.booking?.status,
+          paymentStatus: data.paymentStatus,
+        });
+
+        if (confirmed) {
+          const next = rememberConfirmation(loadAssistStore(window.localStorage), {
+            flightKey,
+            rescueSessionId,
+            stripeSessionId: sessionId,
+            bookingStatus: data.booking?.status || null,
+            paymentStatus: data.paymentStatus,
+          });
+          saveAssistStore(window.localStorage, next);
+          setOutcome('confirmed');
+          return;
+        }
+
+        if (attempts < 8) {
+          attempts += 1;
           setTimeout(fetchBooking, 1500);
           return;
         }
-      } finally {
-        if (!cancelled && !keepPolling) setLoading(false);
+
+        setOutcome('pending');
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Booking status could not be verified.');
+        setOutcome('error');
       }
     };
 
     fetchBooking();
     return () => { cancelled = true; };
-  }, [sessionId]);
+  }, [sessionId, rescueSessionId, flightKey]);
 
   const amount = booking ? (((booking.amount_cents ?? 0) / 100).toFixed(2)) : null;
+  const loading = outcome === 'loading';
+  const confirmed = outcome === 'confirmed';
+
+  const headline = loading
+    ? 'Confirming your rescue…'
+    : confirmed
+      ? "You're all set."
+      : outcome === 'missing'
+        ? 'No checkout session to confirm.'
+        : 'Options stay locked.';
+
+  const detail = loading
+    ? 'Stripe is finalizing your payment. This usually takes just a few seconds.'
+    : confirmed
+      ? 'Payment is confirmed. Curated flights, hotels, and lounges are now visible for this rescue session. Tickets are still booked outside the app.'
+      : outcome === 'error'
+        ? 'Checkout status could not be verified, so replacement options stay hidden.'
+        : outcome === 'missing'
+          ? 'Open Rescue Assist from the flight status screen and finish Stripe checkout before options can appear.'
+          : 'Stripe has not reported this checkout as paid, confirmed, or booked. Replacement flights, hotels, and lounges stay hidden.';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white flex flex-col">
@@ -78,24 +118,23 @@ const BookingSuccess: React.FC = () => {
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-12 sm:py-20">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 mx-auto rounded-full bg-emerald-100 flex items-center justify-center mb-6 ring-8 ring-emerald-50">
+          <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-6 ring-8 ${confirmed || loading ? 'bg-emerald-100 ring-emerald-50' : 'bg-amber-100 ring-amber-50'}`}>
             {loading ? (
               <Loader2 className="w-9 h-9 text-emerald-600 animate-spin" />
-            ) : (
+            ) : confirmed ? (
               <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+            ) : (
+              <Lock className="w-10 h-10 text-amber-600" />
             )}
           </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-700 mb-3">
-            {loading ? 'Finalizing booking' : 'Booking confirmed'}
+          <p className={`text-xs font-semibold uppercase tracking-widest mb-3 ${confirmed || loading ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {loading ? 'Finalizing booking' : confirmed ? 'Booking confirmed' : 'Not confirmed'}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
-            {loading ? 'Confirming your rescue…' : 'You\'re all set.'}
-          </h1>
-          <p className="mt-3 text-slate-600 max-w-lg mx-auto">
-            {loading
-              ? 'Stripe is finalizing your payment. This usually takes just a few seconds.'
-              : 'Payment received. A receipt and your rescue guidance summary are on their way to your inbox.'}
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">{headline}</h1>
+          <p className="mt-3 text-slate-600 max-w-lg mx-auto">{detail}</p>
+          {error && (
+            <p className="mt-3 text-sm text-red-700 max-w-lg mx-auto">{error}</p>
+          )}
         </div>
 
         {booking && (
@@ -140,27 +179,32 @@ const BookingSuccess: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-start gap-3">
-          <Mail className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-          <div className="text-sm">
-            <p className="font-semibold text-blue-900">Check your inbox</p>
-            <p className="text-blue-800 mt-1">
-              We've sent your Stripe receipt and your rescue summary
-              {booking && <> to <strong>{booking.traveler_email}</strong></>}.
-              If you selected a replacement flight, purchase it directly with the airline using the option you chose in the app.
-            </p>
+        {confirmed && (
+          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-start gap-3">
+            <Mail className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <p className="font-semibold text-blue-900">Check your inbox</p>
+              <p className="text-blue-800 mt-1">
+                We've sent your Stripe receipt
+                {booking && <> to <strong>{booking.traveler_email}</strong></>}.
+                Buy the replacement flight directly with the airline. This app does not issue the ticket.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-8 flex justify-center">
           <Link
-            to="/"
+            to={confirmed ? `/?flight=${encodeURIComponent(flightKey || '')}#flights` : '/#rescue-assist'}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition"
           >
-            Back to ConnectionRescue
+            {confirmed ? 'View rescue options' : 'Back to flight status'}
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Not production-ready. A confirmed Stripe test payment only unlocks options in this browser for the flight on the checkout.
+        </p>
       </main>
 
       <Footer />
