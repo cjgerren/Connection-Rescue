@@ -4,6 +4,7 @@ import { ALTERNATE_FLIGHTS, Flight, ORIGINAL_FLIGHT, PLANE_IMG } from '@/data/re
 import { useTraveler } from '@/contexts/TravelerContext';
 import type { LiveFlight } from './FlightSearch';
 import { getAirportCity } from '@/data/airports';
+import { flightHandoffUrl } from '@/lib/handoff.mjs';
 
 interface Props {
   selectedFlight: Flight | null;
@@ -92,7 +93,7 @@ const FlightRebook: React.FC<Props> = ({
             ? 'Loading airport-specific rescue inventory...'
             : inventoryCoverage === 'supabase'
               ? 'SaaS inventory mode is active for this airport. Replacement flight purchase still happens directly with the airline.'
-              : 'Fallback guidance mode is active. SaaS flight inventory is unavailable for this airport right now.'}
+              : 'Fallback guidance mode is active. SaaS flight inventory is unavailable for this airport right now.'} ConnectionRescue does not sell the ticket — continue on the airline site.
         </div>
 
         {/* Filters */}
@@ -206,22 +207,29 @@ const FlightRebook: React.FC<Props> = ({
                           {flight.source === 'live' ? `Rebooking • ${(flight.currency || 'USD').toUpperCase()}` : 'Book directly with airline'}
                         </p>
                     </div>
+                    <a
+                      href={flightHandoffUrl({
+                        flightNum: flight.flightNum,
+                        carrier: flight.carrier,
+                        from: flight.from,
+                        to: flight.to,
+                      })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setSelectedFlight(flight)}
+                      className="w-full lg:w-auto px-5 py-2.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 justify-center bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Book with airline <ArrowRight className="w-4 h-4" />
+                    </a>
                     <button
+                      type="button"
                       onClick={() => setSelectedFlight(selected ? null : flight)}
-                      className={`w-full lg:w-auto px-5 py-2.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 justify-center ${
-                        selected
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-red-600 hover:bg-red-700 text-white'
-                      }`}
+                      className={`text-xs font-semibold ${selected ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'}`}
                     >
                       {selected ? (
-                        <>
-                          <Check className="w-4 h-4" /> Selected
-                        </>
+                        <span className="inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Selected</span>
                       ) : (
-                        <>
-                          Choose option <ArrowRight className="w-4 h-4" />
-                        </>
+                        'Keep in plan'
                       )}
                     </button>
                   </div>

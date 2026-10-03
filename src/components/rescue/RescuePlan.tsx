@@ -7,14 +7,17 @@ interface Props {
   selectedHotel: HotelT | null;
   selectedLounge: Lounge | null;
   onJump: (v: string) => void;
+  locked?: boolean;
 }
 
-const RescuePlan: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLounge, onJump }) => {
+const RescuePlan: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLounge, onJump, locked = false }) => {
   const steps = [
     {
       id: 'flights',
       title: 'Rebook your flight',
-      desc: 'Pick the next available flight to your destination — or to a nearby airport.',
+      desc: locked
+        ? 'Hidden until Rescue Assist checkout is confirmed.'
+        : 'Pick the next available flight to your destination — or to a nearby airport.',
       icon: <Plane className="w-6 h-6" />,
       done: !!selectedFlight,
       doneLabel: selectedFlight ? `${selectedFlight.flightNum} → ${selectedFlight.to} • ${selectedFlight.depart}` : '',
@@ -22,7 +25,9 @@ const RescuePlan: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLo
     {
       id: 'hotels',
       title: 'Secure overnight stay',
-      desc: 'If you need to bunk down, claim your airline-issued voucher or premium upgrade.',
+      desc: locked
+        ? 'Hotel options stay hidden until Rescue Assist is confirmed.'
+        : 'If you need to bunk down, claim your airline-issued voucher or premium upgrade.',
       icon: <Hotel className="w-6 h-6" />,
       done: !!selectedHotel,
       doneLabel: selectedHotel ? selectedHotel.name : '',
@@ -30,7 +35,9 @@ const RescuePlan: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLo
     {
       id: 'lounges',
       title: 'Find your lounge',
-      desc: 'Use your membership or grab a day pass — refresh in luxury while you wait.',
+      desc: locked
+        ? 'Lounge options stay hidden until Rescue Assist is confirmed.'
+        : 'Use your membership or grab a day pass — refresh in luxury while you wait.',
       icon: <Coffee className="w-6 h-6" />,
       done: !!selectedLounge,
       doneLabel: selectedLounge ? `${selectedLounge.name} • ${selectedLounge.gate}` : '',
@@ -99,7 +106,7 @@ const RescuePlan: React.FC<Props> = ({ selectedFlight, selectedHotel, selectedLo
             </p>
 
             <div className={`mt-4 flex items-center gap-1 text-sm font-semibold ${step.done ? 'text-red-300' : 'text-red-600'}`}>
-              {step.done ? 'View / change' : 'Begin step'}
+              {locked ? 'Unlock with Rescue Assist' : step.done ? 'View / change' : 'Begin step'}
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </div>
           </button>

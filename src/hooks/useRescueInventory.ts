@@ -5,6 +5,7 @@ type Args = {
   airportIata: string | null | undefined;
   destinationIata: string | null | undefined;
   destinationCity: string | null | undefined;
+  enabled?: boolean;
 };
 
 type Result = RescueInventory & {
@@ -15,6 +16,7 @@ export function useRescueInventory(args: Args): Result {
   const airportIata = args.airportIata;
   const destinationIata = args.destinationIata;
   const destinationCity = args.destinationCity;
+  const enabled = args.enabled !== false;
   const [state, setState] = useState<Result>({
     flights: [],
     hotels: [],
@@ -30,6 +32,17 @@ export function useRescueInventory(args: Args): Result {
   });
 
   useEffect(() => {
+    if (!enabled) {
+      setState((prev) => ({
+        ...prev,
+        flights: [],
+        hotels: [],
+        lounges: [],
+        loading: false,
+      }));
+      return;
+    }
+
     let cancelled = false;
     setState((prev) => ({ ...prev, loading: true }));
 
@@ -50,7 +63,7 @@ export function useRescueInventory(args: Args): Result {
     return () => {
       cancelled = true;
     };
-  }, [airportIata, destinationCity, destinationIata]);
+  }, [airportIata, destinationCity, destinationIata, enabled]);
 
   return state;
 }

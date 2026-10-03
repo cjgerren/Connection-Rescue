@@ -1,6 +1,7 @@
 import React from 'react';
-import { Hotel as HotelIcon, Star, Check, ArrowRight, Ticket, Info } from 'lucide-react';
+import { Hotel as HotelIcon, Star, ArrowRight, Ticket, Info } from 'lucide-react';
 import { HOTELS, Hotel } from '@/data/rescueData';
+import { hotelHandoffUrl } from '@/lib/handoff.mjs';
 
 interface Props {
   selectedHotel: Hotel | null;
@@ -8,6 +9,7 @@ interface Props {
   hotelOptions?: Hotel[];
   inventoryCoverage?: 'supabase' | 'fallback';
   loadingOptions?: boolean;
+  airportCode?: string;
 }
 
 const HotelRescue: React.FC<Props> = ({
@@ -16,6 +18,7 @@ const HotelRescue: React.FC<Props> = ({
   hotelOptions = HOTELS,
   inventoryCoverage = 'fallback',
   loadingOptions = false,
+  airportCode,
 }) => {
   return (
     <section id="hotels" className="bg-white py-14 scroll-mt-20">
@@ -102,24 +105,15 @@ const HotelRescue: React.FC<Props> = ({
                       </p>
                       <p className="text-[10px] text-slate-500">Airline distressed rate</p>
                     </div>
-                    <button
-                      onClick={() => setSelectedHotel(selected ? null : hotel)}
-                      className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
-                        selected
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-blue-950 hover:bg-blue-900 text-white'
-                      }`}
+                    <a
+                      href={hotelHandoffUrl({ name: hotel.name, airport: airportCode })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setSelectedHotel(hotel)}
+                      className="px-4 py-2.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 bg-blue-950 hover:bg-blue-900 text-white"
                     >
-                      {selected ? (
-                        <>
-                          <Check className="w-4 h-4" /> Booked
-                        </>
-                      ) : (
-                        <>
-                          Book Now <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
+                      Open to book <ArrowRight className="w-4 h-4" />
+                    </a>
                   </div>
                 </div>
               </div>

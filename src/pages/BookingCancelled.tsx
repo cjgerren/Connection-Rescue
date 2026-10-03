@@ -31,8 +31,8 @@ const BookingCancelled: React.FC = () => {
             No charge was made.
           </h1>
           <p className="mt-3 text-slate-600 max-w-lg mx-auto">
-            You exited Stripe before completing payment, so your rescue plan was not booked.
-            Your selections are still saved — you can finish whenever you're ready.
+            You exited Stripe before completing payment, so Rescue Assist was not confirmed.
+            Disruption status is still free. Replacement flights, hotels, and lounges stay hidden.
           </p>
         </div>
 

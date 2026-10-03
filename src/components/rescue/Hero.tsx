@@ -15,6 +15,9 @@ interface HeroProps {
   onViewPricing?: () => void;
   onStartDemo?: () => void;
   demoMode?: boolean;
+  optionsUnlocked?: boolean;
+  assistPrice?: string;
+  fallbackFlightNumber?: string | null;
 }
 
 
@@ -37,7 +40,7 @@ const hasKnownCity = (value: string | null | undefined) => {
   return !!text && !text.toLowerCase().startsWith('unknown');
 };
 
-const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated, onPersonalize, onViewPricing, onStartDemo, demoMode }) => {
+const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated, onPersonalize, onViewPricing, onStartDemo, demoMode, optionsUnlocked = false, assistPrice = '$14.99', fallbackFlightNumber }) => {
   const { profile, hasProfile } = useTraveler();
   const bp = profile.boardingPass;
   const firstName = bp?.passengerName?.split('/')?.pop()?.split(' ')?.[0] || '';
@@ -50,7 +53,7 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
   const nearest = nearestAirport(profile.location);
 
   // Pick display values from live flight, then scanned boarding pass, then location/demo.
-  const flightNum = liveFlight?.flightNumber || bp?.flightNumber || ORIGINAL_FLIGHT.flightNum;
+  const flightNum = liveFlight?.flightNumber || bp?.flightNumber || fallbackFlightNumber || ORIGINAL_FLIGHT.flightNum;
   const liveFromCode = hasKnownCode(liveFlight?.departure.airport) ? String(liveFlight?.departure.airport) : null;
   const liveToCode = hasKnownCode(liveFlight?.arrival.airport) ? String(liveFlight?.arrival.airport) : null;
   const fromCode = liveFromCode || bp?.from || nearest?.airport.code || ORIGINAL_FLIGHT.from;
@@ -143,7 +146,9 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
               {isDisrupted ? (
                 <>
                   Your flight {flightNum} from {fromCode} to {toCode} is {status.toLowerCase()}.
-                  We've already lined up your recovery — rebook, find a hotel, and access a lounge in seconds.
+                  {optionsUnlocked
+                    ? ' Rescue Assist is confirmed for this session. Curated options are below — tickets, rooms, and lounge passes are still booked outside this app.'
+                    : ' Status is free. Replacement flights, hotels, and lounges stay hidden until Rescue Assist checkout is confirmed.'}
                 </>
               ) : (
                 <>
@@ -158,7 +163,7 @@ const Hero: React.FC<HeroProps> = ({ onStartRescue, liveFlight, onFlightUpdated,
                 className="group relative inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold shadow-2xl shadow-red-900/40 hover:shadow-red-700/50 hover:scale-[1.02] transition-all"
               >
                 <Plane className="w-5 h-5" />
-                {isDisrupted ? 'Start Rescue Plan' : 'Pre-Plan Rescue'}
+                {optionsUnlocked ? (isDisrupted ? 'View rescue options' : 'Pre-Plan Rescue') : `Unlock options · ${assistPrice}`}
               </button>
               {onStartDemo && (
                 <button

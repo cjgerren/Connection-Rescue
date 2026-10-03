@@ -108,3 +108,4 @@ SUPABASE_ACCESS_TOKEN=your_supabase_cli_access_token
 - Public checkout now uses the backend instead of relying on a missing frontend-only checkout function.
 - Booking success polling is aligned with backend `confirmed` statuses.
 - Flight rescue is now AviationStack-driven guidance mode: live flight status plus curated rebooking suggestions, with actual airline ticket purchase handled outside the app.
+- Rescue Assist paywall: disruption status is free. Curated flights, hotels, and lounges render only after the existing booking-success flow records a paid, confirmed, or booked checkout for that flight. The gate is client-side, uses Stripe test pricing ($14.99 by default), and is not production-ready.
